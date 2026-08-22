@@ -1,5 +1,7 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.products import router as products_router
 from app.db.database import SessionLocal
 from app.models.models import Order
 from app.schemas.order import TestOrderRequest
@@ -8,6 +10,15 @@ from app.services.razorpay_service import create_test_order
 
 app = FastAPI(title="RazorGrow API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(products_router)
 
 @app.get("/health")
 def health():

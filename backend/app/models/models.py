@@ -11,6 +11,22 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(255))
     price: Mapped[float] = mapped_column(Float)
 
+    category: Mapped[str] = mapped_column(String(100))
+    tags: Mapped[str] = mapped_column(String(500), default="")
+    use_cases: Mapped[str] = mapped_column(String(500), default="")
+
+    compatible_products: Mapped[str] = mapped_column(
+        String(500),
+        default="",
+    )
+
+    upsell_products: Mapped[str] = mapped_column(
+        String(500),
+        default="",
+    )
+
+    inventory: Mapped[int] = mapped_column(Integer, default=0)
+
 
 class Order(Base):
     __tablename__ = "orders"
