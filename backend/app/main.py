@@ -6,6 +6,9 @@ from app.db.database import SessionLocal
 from app.models.models import Order
 from app.schemas.order import TestOrderRequest
 from app.services.razorpay_service import create_test_order
+from app.api.intent import router as intent_router
+from app.api.recommendations import router as recommendations_router
+from app.api.upsells import router as upsells_router
 
 
 app = FastAPI(title="RazorGrow API")
@@ -19,6 +22,9 @@ app.add_middleware(
 )
 
 app.include_router(products_router)
+app.include_router(intent_router)
+app.include_router(recommendations_router)
+app.include_router(upsells_router)
 
 @app.get("/health")
 def health():

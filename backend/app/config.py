@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     razorpay_key_id: str
     razorpay_key_secret: str
+    groq_api_key: str
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
