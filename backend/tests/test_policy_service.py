@@ -1,12 +1,11 @@
 from app.db.database import SessionLocal
-from app.services.checkout_service import create_checkout_order
 from app.models.models import Policy
+from app.services.policy_service import evaluate_policy
 
 
 db = SessionLocal()
 
 try:
-    
     policy = Policy(
         max_order_amount=100000,
         max_discount=10,
@@ -16,13 +15,17 @@ try:
 
     db.add(policy)
     db.commit()
-    result = create_checkout_order(
-        db,
-        cart_id=4,
-        confirmed=True,
-    )
+    db.refresh(policy)
 
-    print(result)
+    decision = evaluate_policy(
+    policy=policy,
+    order_amount=95000,
+    discount=0,
+    confirmed=True,
+)
+
+    print("Decision:", decision.decision)
+    print("Reason:", decision.reason)
 
 finally:
     db.close()

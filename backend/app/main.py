@@ -11,6 +11,7 @@ from app.api.recommendations import router as recommendations_router
 from app.api.upsells import router as upsells_router
 from app.api.cart import router as cart_router
 from app.api.checkout import router as checkout_router
+from app.api.policy import router as policy_router
 
 app = FastAPI(title="RazorGrow API")
 
@@ -28,6 +29,7 @@ app.include_router(recommendations_router)
 app.include_router(upsells_router)
 app.include_router(cart_router)
 app.include_router(checkout_router)
+app.include_router(policy_router)
 
 @app.get("/health")
 def health():

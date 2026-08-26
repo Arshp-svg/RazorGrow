@@ -1,4 +1,4 @@
-from sqlalchemy import Float, Integer, String, Column, ForeignKey
+from sqlalchemy import (Float, Integer, String, Column, ForeignKey, Boolean)
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -107,3 +107,33 @@ class CartItem(Base):
     )
 
     product = relationship("Product")
+    
+
+class Policy(Base):
+    __tablename__ = "policies"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    max_order_amount = Column(
+        Float,
+        nullable=False,
+        default=100000,
+    )
+
+    max_discount = Column(
+        Float,
+        nullable=False,
+        default=0,
+    )
+
+    confirmation_required = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    approval_threshold = Column(
+        Float,
+        nullable=True,
+        default=None,
+    )
