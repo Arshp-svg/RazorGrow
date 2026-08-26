@@ -9,7 +9,8 @@ from app.services.razorpay_service import create_test_order
 from app.api.intent import router as intent_router
 from app.api.recommendations import router as recommendations_router
 from app.api.upsells import router as upsells_router
-
+from app.api.cart import router as cart_router
+from app.api.checkout import router as checkout_router
 
 app = FastAPI(title="RazorGrow API")
 
@@ -25,6 +26,8 @@ app.include_router(products_router)
 app.include_router(intent_router)
 app.include_router(recommendations_router)
 app.include_router(upsells_router)
+app.include_router(cart_router)
+app.include_router(checkout_router)
 
 @app.get("/health")
 def health():

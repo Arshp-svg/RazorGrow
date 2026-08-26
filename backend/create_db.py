@@ -1,5 +1,5 @@
 from app.db.database import Base, engine
-from app.models.models import Order, Product
+from app.models.models import Order, Product, Cart, CartItem
 
 
 Base.metadata.create_all(bind=engine)

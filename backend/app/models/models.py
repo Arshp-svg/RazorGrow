@@ -1,4 +1,5 @@
-from sqlalchemy import Float, Integer, String
+from sqlalchemy import Float, Integer, String, Column, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -38,3 +39,71 @@ class Order(Base):
         String(255),
         nullable=True,
     )
+    
+
+class Cart(Base):
+    __tablename__ = "carts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    customer_id = Column(String, nullable=True)
+
+    status = Column(
+        String,
+        nullable=False,
+        default="active",
+    )
+
+    subtotal = Column(
+        Float,
+        nullable=False,
+        default=0,
+    )
+
+    total = Column(
+        Float,
+        nullable=False,
+        default=0,
+    )
+
+    items = relationship(
+        "CartItem",
+        back_populates="cart",
+        cascade="all, delete-orphan",
+    )
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    cart_id = Column(
+        Integer,
+        ForeignKey("carts.id"),
+        nullable=False,
+    )
+
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id"),
+        nullable=False,
+    )
+
+    quantity = Column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    unit_price = Column(
+        Float,
+        nullable=False,
+    )
+
+    cart = relationship(
+        "Cart",
+        back_populates="items",
+    )
+
+    product = relationship("Product")
