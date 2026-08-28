@@ -27,3 +27,13 @@ def create_test_order(amount: int):
             "receipt": "razorgrow_test_receipt",
         }
     )
+    
+def verify_order_amount(
+    cart_total: float,
+    razorpay_amount: int,
+) -> bool:
+    expected_amount = int(
+        round(cart_total * 100)
+    )
+
+    return expected_amount == razorpay_amount

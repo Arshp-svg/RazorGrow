@@ -1,9 +1,12 @@
 from sqlalchemy.orm import Session
 
-from app.models.models import Cart, Policy
+from app.models.models import Cart, Order, Policy
 
 from app.services.cart_service import validate_checkout
-from app.services.razorpay_service import create_test_order
+from app.services.razorpay_service import (
+    create_test_order,
+    verify_order_amount,
+)
 from app.services.policy_service import evaluate_policy
 
 
@@ -57,16 +60,38 @@ def create_checkout_order(
     amount_in_paise = int(
         round(cart.total * 100)
     )
+    
+    
 
     razorpay_order = create_test_order(
         amount_in_paise
     )
+    
+    if not verify_order_amount(
+        cart_total=cart.total,
+        razorpay_amount=razorpay_order["amount"],
+    ):
+        raise ValueError(
+            "Payment amount verification failed"
+        )
+    
+    local_order = Order(
+        cart_id=cart.id,
+        amount=cart.total,
+        status=razorpay_order["status"],
+        razorpay_order_id=razorpay_order["id"],
+    )
+
+    db.add(local_order)
+    db.commit()
+    db.refresh(local_order)
 
     return {
-        "cart_id": cart.id,
-        "amount": cart.total,
-        "amount_in_paise": amount_in_paise,
-        "currency": razorpay_order["currency"],
-        "razorpay_order_id": razorpay_order["id"],
-        "status": razorpay_order["status"],
-    } 
+    "local_order_id": local_order.id,
+    "cart_id": cart.id,
+    "amount": cart.total,
+    "amount_in_paise": amount_in_paise,
+    "currency": razorpay_order["currency"],
+    "razorpay_order_id": razorpay_order["id"],
+    "status": local_order.status,
+} 

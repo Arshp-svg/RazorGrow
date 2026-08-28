@@ -32,9 +32,27 @@ class Product(Base):
 class Order(Base):
     __tablename__ = "orders"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    amount: Mapped[float] = mapped_column(Float)
-    status: Mapped[str] = mapped_column(String(50), default="created")
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    cart_id: Mapped[int] = mapped_column(
+        ForeignKey("carts.id"),
+        nullable=False,
+    )
+
+    amount: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="created",
+    )
+
     razorpay_order_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
