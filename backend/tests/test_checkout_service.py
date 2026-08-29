@@ -19,7 +19,7 @@ try:
     db.commit()
 
     fake_razorpay_order = {
-    "id": "order_day8_payment_test",
+    "id": "order_day9_retry_test",
     "status": "created",
     "currency": "INR",
     "amount": 6200000,

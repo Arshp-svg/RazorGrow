@@ -7,8 +7,8 @@ db = SessionLocal()
 try:
     order = update_payment_status(
         db=db,
-        razorpay_order_id="order_day8_payment_test",
-        status="completed",
+        razorpay_order_id="order_day9_retry_test",
+        status="paid"
     )
 
     print(

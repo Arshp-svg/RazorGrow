@@ -1,7 +1,7 @@
-from sqlalchemy import (Float, Integer, String, Column, ForeignKey, Boolean)
+from sqlalchemy import (Float, Integer, String, Column, ForeignKey, Boolean,DateTime)
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import Mapped, mapped_column
-
+from datetime import datetime
 from app.db.database import Base
 
 
@@ -154,4 +154,48 @@ class Policy(Base):
         Float,
         nullable=True,
         default=None,
+    )
+    
+    
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    action: Mapped[str] = mapped_column(
+        String(100)
+    )
+
+    entity_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    policy_result: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    external_result: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    error: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    recovery: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
     )

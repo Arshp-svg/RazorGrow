@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-
+from app.services.audit_service import record_audit
 from app.models.models import Order
 
 
@@ -32,9 +32,27 @@ def update_payment_status(
             "Order not found"
         )
 
+    if order.status == "paid":
+        raise ValueError(
+            "Order is already paid"
+        )
+
     order.status = status
 
-    db.commit()
+    record_audit(
+        db=db,
+        action="payment_status_updated",
+        entity_id=str(order.id),
+        policy_result=None,
+        external_result=status,
+        error=None,
+        recovery=(
+            "retry_available"
+            if status == "failed"
+            else None
+        ),
+    )
+
     db.refresh(order)
 
     return order
