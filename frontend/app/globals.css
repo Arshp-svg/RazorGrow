@@ -1,26 +1,80 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0b0e14;
+  --surface: #12161f;
+  --surface-2: #191f2c;
+  --border: #232a3a;
+  --text: #e8ecf4;
+  --text-dim: #8b94a8;
+  --accent: #3395ff;
+  --accent-soft: rgba(51, 149, 255, 0.12);
+  --success: #2fd180;
+  --success-soft: rgba(47, 209, 128, 0.12);
+  --warning: #ffb020;
+  --warning-soft: rgba(255, 176, 32, 0.12);
+  --danger: #ff5c5c;
+  --danger-soft: rgba(255, 92, 92, 0.12);
+
+  --font-display: var(--font-space-grotesk), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-dim: var(--text-dim);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(51, 149, 255, 0.09), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
 }
+
+::selection {
+  background: var(--accent);
+  color: #05070c;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(47, 209, 128, 0.5); }
+  50% { opacity: 0.55; box-shadow: 0 0 0 4px rgba(47, 209, 128, 0); }
+}
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: rise-in 0.4s ease-out both;
+}
+
+/* thin custom scrollbar for the ledger feed */
+.ledger-scroll::-webkit-scrollbar { width: 6px; }
+.ledger-scroll::-webkit-scrollbar-track { background: transparent; }
+.ledger-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
