@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from app.models.models import AuditLog
 from app.db.database import SessionLocal
 from app.services.dashboard_service import get_dashboard_metrics
 from app.models.models import AuditLog, Order

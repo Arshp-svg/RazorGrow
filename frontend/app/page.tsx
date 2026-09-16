@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+
+import { useEffect, useState } from "react";
 
 type Product = {
   id: number;
@@ -13,7 +14,7 @@ type Product = {
   inventory: number;
 };
 
-type DashboardMetrics = {
+type Metrics = {
   total_orders: number;
   created_orders: number;
   successful_payments: number;
@@ -36,368 +37,616 @@ type Activity = {
   recovery: string | null;
 };
 
-type Status = "success" | "warning" | "danger" | "neutral";
-
-function activityStatus(event: Activity): Status {
-  if (event.error) return "danger";
-  if (event.recovery) return "warning";
-  if (event.external_result?.toLowerCase().includes("fail")) return "danger";
-  if (event.external_result?.toLowerCase().includes("success")) return "success";
-  if (event.policy_result?.toLowerCase().includes("block")) return "danger";
-  return "neutral";
-}
-
-const statusDot: Record<Status, string> = {
-  success: "bg-success",
-  warning: "bg-warning",
-  danger: "bg-danger",
-  neutral: "bg-accent",
+type DashboardOverview = {
+  metrics: Metrics;
+  activity: Activity[];
 };
 
-const statusBorder: Record<Status, string> = {
-  success: "border-l-success",
-  warning: "border-l-warning",
-  danger: "border-l-danger",
-  neutral: "border-l-accent",
-};
+const API = "http://127.0.0.1:8000";
 
-function inr(value: number) {
+function money(value: number) {
   return `₹${value.toLocaleString("en-IN")}`;
 }
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [dashboardLoading, setDashboardLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [dashboard, setDashboard] =
+    useState<DashboardOverview | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activity, setActivity] = useState<Activity[]>([]);
-  const [now, setNow] = useState<string>("");
 
- useEffect(() => {
-  const loadProducts = async () => {
-    try {
-      const response = await fetch("http://127.0.0.1:8000/products");
-      if (!response.ok) throw new Error("Failed to load products");
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API}/products`).then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load products");
+        }
 
-      const data = await response.json();
-      setProducts(data);
-    } catch (err) {
-      console.error(err);
-      setError("Could not connect to the RazorGrow backend.");
-    } finally {
-      setLoading(false);
-    }
-  };
+        return response.json();
+      }),
 
-  const loadDashboard = async () => {
-    try {
-      const response = await fetch("http://127.0.0.1:8000/dashboard/overview");
-      if (!response.ok) throw new Error("Failed to load dashboard");
+      fetch(`${API}/dashboard/overview?limit=10`).then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load dashboard");
+        }
 
-      const data = await response.json();
-      setMetrics(data.metrics);
-      setActivity(data.activity);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDashboardLoading(false);
-    }
-  };
-
-  loadProducts();
-  loadDashboard();
-}, []);
-
-useEffect(() => {
-  const updateTime = () => {
-    setNow(
-      new Date().toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
+        return response.json();
+      }),
+    ])
+      .then(([productData, dashboardData]) => {
+        setProducts(productData);
+        setDashboard(dashboardData);
+        setLoading(false);
+        setDashboardLoading(false);
       })
-    );
-  };
+      .catch((err) => {
+        console.error(err);
+        setError("Could not connect to the RazorGrow backend.");
+        setLoading(false);
+        setDashboardLoading(false);
+      });
+  }, []);
 
-  updateTime();
-
-  const interval = setInterval(updateTime, 60_000);
-
-  return () => clearInterval(interval);
-}, []);
-
-  const filteredProducts = useMemo(() => {
+  const filteredProducts = products.filter((product) => {
     const query = search.toLowerCase().trim();
-    if (!query) return products;
-    return products.filter(
-      (product) =>
-        product.name.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query) ||
-        product.tags.some((tag) => tag.toLowerCase().includes(query)) ||
-        product.use_cases.some((useCase) => useCase.toLowerCase().includes(query))
+
+    if (!query) {
+      return true;
+    }
+
+    return (
+      product.name.toLowerCase().includes(query) ||
+      product.category.toLowerCase().includes(query) ||
+      product.tags.some((tag) =>
+        tag.toLowerCase().includes(query)
+      ) ||
+      product.use_cases.some((useCase) =>
+        useCase.toLowerCase().includes(query)
+      )
     );
-  }, [products, search]);
+  });
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-bg text-text-dim font-mono text-sm">
-        <span className="w-1.5 h-1.5 rounded-full bg-accent pulse-dot mr-3" />
-        booting agent console…
+      <main style={styles.page}>
+        <p>Loading RazorGrow...</p>
       </main>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-bg px-6">
-        <div className="border border-danger/40 bg-danger-soft rounded-xl px-6 py-5 text-danger font-mono text-sm max-w-md text-center">
-          {error}
-        </div>
+      <main style={styles.page}>
+        <div style={styles.error}>{error}</div>
       </main>
     );
   }
 
-  const metricCards = metrics
-    ? [
-        { label: "Revenue", value: inr(metrics.revenue), tone: "text-text" },
-        { label: "Recovered Revenue", value: inr(metrics.recovered_revenue), tone: "text-success" },
-        { label: "Avg. Order Value", value: inr(metrics.average_order_value), tone: "text-text" },
-        { label: "Payment Conversion", value: `${metrics.payment_conversion_rate}%`, tone: "text-accent" },
-      ]
-    : [];
-
   return (
-    <main className="min-h-screen bg-bg text-text font-sans px-6 py-10 md:px-12 md:py-14">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10 rise-in">
+    <main style={styles.page}>
+      {/* Header */}
+      <header style={styles.header}>
+        <div>
+          <div style={styles.brand}>RazorGrow</div>
+          <div style={styles.subtitle}>
+            Autonomous AI Revenue Agent
+          </div>
+        </div>
+
+        <div style={styles.status}>
+          <span style={styles.statusDot}></span>
+          System operational
+        </div>
+      </header>
+
+      {/* Dashboard */}
+      <section style={styles.dashboard}>
+        <div style={styles.sectionHeader}>
           <div>
-            <p className="font-mono text-xs tracking-widest text-accent uppercase mb-2">
-              RazorGrow · Autonomous Revenue Agent
-            </p>
-            <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">
-              Merchant Console
-            </h1>
-            <p className="text-text-dim mt-1.5 text-sm">
-              Payment recovery, policy checks, and catalog intelligence — running on Razorpay.
+            <h1 style={styles.title}>Merchant Dashboard</h1>
+            <p style={styles.muted}>
+              Revenue intelligence, payment recovery and agent activity
             </p>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto border border-success/30 bg-success-soft rounded-full px-3.5 py-1.5 font-mono text-xs text-success">
-            <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
-            AGENT OPERATIONAL{now ? ` · ${now} IST` : ""}
-          </div>
-        </header>
+        {dashboardLoading ? (
+          <p>Loading metrics...</p>
+        ) : dashboard ? (
+          <>
+            <div style={styles.metricsGrid}>
+              <MetricCard
+                label="Revenue"
+                value={money(dashboard.metrics.revenue)}
+              />
 
-        {/* Metrics ledger strip */}
-        <section className="mb-12 rise-in" style={{ animationDelay: "60ms" }}>
-          {dashboardLoading ? (
-            <p className="text-text-dim font-mono text-sm">reading ledger…</p>
-          ) : metrics ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border rounded-xl overflow-hidden border border-border">
-              {metricCards.map((card) => (
-                <div key={card.label} className="bg-surface px-5 py-5">
-                  <p className="text-xs uppercase tracking-wider text-text-dim">{card.label}</p>
-                  <p className={`font-mono text-2xl md:text-[26px] font-semibold mt-2 ${card.tone}`}>
-                    {card.value}
-                  </p>
-                </div>
-              ))}
-              <div className="bg-surface px-5 py-5 col-span-2 lg:col-span-4 flex flex-wrap gap-x-8 gap-y-2 border-t border-border">
-                <span className="font-mono text-xs text-text-dim">
-                  Orders <span className="text-text">{metrics.total_orders}</span>
-                </span>
-                <span className="font-mono text-xs text-text-dim">
-                  Successful <span className="text-success">{metrics.successful_payments}</span>
-                </span>
-                <span className="font-mono text-xs text-text-dim">
-                  Failed <span className="text-danger">{metrics.failed_payments}</span>
-                </span>
-                <span className="font-mono text-xs text-text-dim">
-                  Recovered <span className="text-warning">{metrics.recovered_payments}</span>
-                </span>
-                <span className="font-mono text-xs text-text-dim">
-                  Policy blocks <span className="text-text">{metrics.policy_blocks}</span>
-                </span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-text-dim font-mono text-sm">Dashboard unavailable.</p>
-          )}
-        </section>
+              <MetricCard
+                label="Recovered Revenue"
+                value={money(
+                  dashboard.metrics.recovered_revenue
+                )}
+              />
 
-        {/* Agent Activity — signature terminal ledger */}
-        <section className="mb-14 rise-in" style={{ animationDelay: "120ms" }}>
-          <div className="flex items-baseline justify-between mb-4">
-            <div>
-              <h2 className="font-display text-lg font-semibold">Agent Activity</h2>
-              <p className="text-text-dim text-sm mt-0.5">
-                Live decisions and payment recovery actions
-              </p>
-            </div>
-            <span className="font-mono text-xs text-text-dim hidden md:inline">
-              {activity.length} events
-            </span>
-          </div>
+              <MetricCard
+                label="Average Order"
+                value={money(
+                  dashboard.metrics.average_order_value
+                )}
+              />
 
-          <div className="border border-border rounded-xl bg-surface overflow-hidden">
-            <div className="max-h-[420px] overflow-y-auto ledger-scroll divide-y divide-border">
-              {activity.length === 0 ? (
-                <p className="px-5 py-6 text-text-dim font-mono text-sm">
-                  no agent activity found.
-                </p>
-              ) : (
-                activity.map((event) => {
-                  const status = activityStatus(event);
-                  return (
-                    <div
-                      key={event.id}
-                      className={`border-l-2 ${statusBorder[status]} px-5 py-3.5 hover:bg-surface-2/60 transition-colors`}
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-1.5 h-1.5 rounded-full ${statusDot[status]}`} />
-                          <span className="font-mono text-sm text-text">{event.action}</span>
-                          <span className="font-mono text-xs text-text-dim">
-                            → {event.entity_id}
-                          </span>
-                        </div>
-                        <span className="font-mono text-xs text-text-dim shrink-0">
-                          #{String(event.id).padStart(4, "0")}
-                        </span>
-                      </div>
-
-                      {(event.policy_result || event.external_result || event.recovery || event.error) && (
-                        <div className="flex flex-wrap gap-x-5 gap-y-1 mt-1.5 pl-4 font-mono text-xs">
-                          {event.policy_result && (
-                            <span className="text-text-dim">
-                              policy: <span className="text-text">{event.policy_result}</span>
-                            </span>
-                          )}
-                          {event.external_result && (
-                            <span className="text-text-dim">
-                              result: <span className="text-text">{event.external_result}</span>
-                            </span>
-                          )}
-                          {event.recovery && (
-                            <span className="text-warning">recovery: {event.recovery}</span>
-                          )}
-                          {event.error && <span className="text-danger">error: {event.error}</span>}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Product Catalog */}
-        <section className="rise-in" style={{ animationDelay: "180ms" }}>
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-5">
-            <div>
-              <h2 className="font-display text-lg font-semibold">Product Catalog</h2>
-              <p className="text-text-dim text-sm mt-0.5">
-                {filteredProducts.length} of {products.length} products
-              </p>
-            </div>
-
-            <div className="relative w-full md:w-80">
-              <input
-                type="text"
-                placeholder="Search name, category, tag…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full bg-surface border border-border rounded-lg pl-4 pr-4 py-2.5 text-sm text-text placeholder:text-text-dim outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-shadow"
+              <MetricCard
+                label="Payment Conversion"
+                value={`${dashboard.metrics.payment_conversion_rate}%`}
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredProducts.map((product) => (
-              <article
-                key={product.id}
-                className="border border-border bg-surface rounded-xl p-5 flex flex-col hover:border-accent/50 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-display text-base font-semibold leading-snug">
-                    {product.name}
-                  </h3>
-                  <span className="font-mono text-xs text-text-dim shrink-0 mt-1">
-                    {product.category}
-                  </span>
+            <div style={styles.secondaryGrid}>
+              <MetricCard
+                label="Total Orders"
+                value={dashboard.metrics.total_orders.toString()}
+              />
+
+              <MetricCard
+                label="Successful Payments"
+                value={dashboard.metrics.successful_payments.toString()}
+              />
+
+              <MetricCard
+                label="Recovered Payments"
+                value={dashboard.metrics.recovered_payments.toString()}
+              />
+
+              <MetricCard
+                label="Policy Blocks"
+                value={dashboard.metrics.policy_blocks.toString()}
+              />
+            </div>
+
+            {/* Agent Activity */}
+            <div style={styles.activityCard}>
+              <div style={styles.activityHeader}>
+                <div>
+                  <h2 style={styles.cardTitle}>Agent Activity</h2>
+                  <p style={styles.muted}>
+                    Recent autonomous decisions and payment events
+                  </p>
                 </div>
 
-                <p className="font-mono text-xl text-accent font-semibold mt-2">
-                  {inr(product.price)}
-                </p>
+                <span style={styles.liveBadge}>LIVE DATA</span>
+              </div>
 
-                <p className="text-xs text-text-dim mt-2">
-                  {product.inventory > 0 ? (
-                    <span className="text-success">{product.inventory} in stock</span>
-                  ) : (
-                    <span className="text-danger">out of stock</span>
-                  )}
-                </p>
-
-                {product.use_cases.length > 0 && (
-                  <p className="text-sm text-text-dim mt-3 leading-relaxed">
-                    {product.use_cases.join(" · ")}
-                  </p>
-                )}
-
-                {product.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {product.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="font-mono text-[11px] text-text-dim border border-border rounded-full px-2 py-0.5"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <button
-                  onClick={async () => {
-                    try {
-                      const response = await fetch(
-                        `http://127.0.0.1:8000/products/${product.id}`
-                      );
-                      if (!response.ok) {
-                        alert("Could not load product details.");
-                        return;
-                      }
-                      const details = await response.json();
-                      alert(
-                        `${details.name}\n\n` +
-                          `Price: ${inr(details.price)}\n` +
-                          `Category: ${details.category}\n` +
-                          `Inventory: ${details.inventory}`
-                      );
-                    } catch (err) {
-                      console.error(err);
-                      alert("Could not connect to the RazorGrow backend.");
-                    }
-                  }}
-                  className="mt-4 text-sm font-medium text-accent border border-accent/30 rounded-lg py-2 hover:bg-accent-soft transition-colors"
+              {dashboard.activity.map((activity) => (
+                <div
+                  key={activity.id}
+                  style={styles.activityRow}
                 >
-                  View details
-                </button>
-              </article>
-            ))}
-          </div>
+                  <div style={styles.activityMain}>
+                    <strong>
+                      {formatAction(activity.action)}
+                    </strong>
 
-          {filteredProducts.length === 0 && (
-            <p className="text-text-dim text-sm mt-10 text-center font-mono">
-              no products match “{search}”.
-            </p>
-          )}
-        </section>
-      </div>
+                    <span style={styles.entity}>
+                      Entity #{activity.entity_id}
+                    </span>
+                  </div>
+
+                  <div style={styles.activityResult}>
+                    {activity.policy_result && (
+                      <span style={styles.approved}>
+                        {activity.policy_result}
+                      </span>
+                    )}
+
+                    {activity.external_result && (
+                      <span style={styles.external}>
+                        {activity.external_result}
+                      </span>
+                    )}
+
+                    {activity.recovery && (
+                      <span style={styles.recovery}>
+                        {activity.recovery}
+                      </span>
+                    )}
+
+                    {activity.error && (
+                      <span style={styles.failed}>
+                        {activity.error}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      {/* Product Catalog */}
+      <section style={styles.catalog}>
+        <div>
+          <h2 style={styles.title}>Merchant Catalog</h2>
+          <p style={styles.muted}>
+            Discover products and demonstrate the revenue-agent flow.
+          </p>
+        </div>
+
+        <input
+          type="text"
+          placeholder="Search products..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          style={styles.search}
+        />
+
+        <div style={styles.productGrid}>
+          {filteredProducts.map((product) => (
+            <article
+              key={product.id}
+              style={styles.productCard}
+            >
+              <div style={styles.productTop}>
+                <span style={styles.category}>
+                  {product.category}
+                </span>
+
+                <span style={styles.inventory}>
+                  Stock: {product.inventory}
+                </span>
+              </div>
+
+              <h3 style={styles.productName}>
+                {product.name}
+              </h3>
+
+              <p style={styles.price}>
+                {money(product.price)}
+              </p>
+
+              <p style={styles.productInfo}>
+                <strong>Use cases:</strong>{" "}
+                {product.use_cases.join(", ")}
+              </p>
+
+              <p style={styles.productInfo}>
+                <strong>Tags:</strong>{" "}
+                {product.tags.join(", ")}
+              </p>
+
+              <button
+                onClick={async () => {
+                  const response = await fetch(
+                    `${API}/products/${product.id}`
+                  );
+
+                  if (!response.ok) {
+                    alert("Could not load product details.");
+                    return;
+                  }
+
+                  const details = await response.json();
+
+                  alert(
+                    `${details.name}\n\n` +
+                      `Price: ${money(details.price)}\n` +
+                      `Category: ${details.category}\n` +
+                      `Inventory: ${details.inventory}`
+                  );
+                }}
+                style={styles.button}
+              >
+                View details
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
+
+function MetricCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>{label}</div>
+      <div style={styles.metricValue}>{value}</div>
+    </div>
+  );
+}
+
+function formatAction(action: string) {
+  return action
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    padding: "32px",
+    background: "#f7f8fa",
+    color: "#171717",
+    fontFamily:
+      "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  },
+
+  header: {
+    maxWidth: 1200,
+    margin: "0 auto 32px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  brand: {
+    fontSize: 28,
+    fontWeight: 800,
+  },
+
+  subtitle: {
+    marginTop: 4,
+    color: "#666",
+    fontSize: 14,
+  },
+
+  status: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#fff",
+    border: "1px solid #ddd",
+    fontSize: 13,
+    fontWeight: 600,
+  },
+
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "#16a34a",
+  },
+
+  dashboard: {
+    maxWidth: 1200,
+    margin: "0 auto",
+  },
+
+  sectionHeader: {
+    marginBottom: 24,
+  },
+
+  title: {
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 750,
+  },
+
+  muted: {
+    marginTop: 6,
+    color: "#6b7280",
+    fontSize: 14,
+  },
+
+  metricsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 16,
+  },
+
+  secondaryGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 16,
+    marginTop: 16,
+  },
+
+  metricCard: {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 14,
+    padding: 20,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+  },
+
+  metricLabel: {
+    color: "#6b7280",
+    fontSize: 13,
+    fontWeight: 600,
+  },
+
+  metricValue: {
+    marginTop: 8,
+    fontSize: 25,
+    fontWeight: 800,
+  },
+
+  activityCard: {
+    marginTop: 24,
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+
+  activityHeader: {
+    padding: 20,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottom: "1px solid #eee",
+  },
+
+  cardTitle: {
+    margin: 0,
+    fontSize: 18,
+  },
+
+  liveBadge: {
+    fontSize: 11,
+    fontWeight: 800,
+    padding: "6px 9px",
+    borderRadius: 999,
+    background: "#ecfdf5",
+    color: "#047857",
+  },
+
+  activityRow: {
+    padding: "15px 20px",
+    borderBottom: "1px solid #f0f0f0",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 20,
+    flexWrap: "wrap",
+  },
+
+  activityMain: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+
+  entity: {
+    color: "#888",
+    fontSize: 12,
+  },
+
+  activityResult: {
+    display: "flex",
+    gap: 7,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+
+  approved: {
+    padding: "5px 8px",
+    borderRadius: 6,
+    background: "#ecfdf5",
+    color: "#047857",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+
+  external: {
+    padding: "5px 8px",
+    borderRadius: 6,
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+
+  recovery: {
+    padding: "5px 8px",
+    borderRadius: 6,
+    background: "#fff7ed",
+    color: "#c2410c",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+
+  failed: {
+    padding: "5px 8px",
+    borderRadius: 6,
+    background: "#fef2f2",
+    color: "#b91c1c",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+
+  catalog: {
+    maxWidth: 1200,
+    margin: "48px auto 0",
+  },
+
+  search: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: 14,
+    marginTop: 20,
+    border: "1px solid #d1d5db",
+    borderRadius: 10,
+    background: "#fff",
+    fontSize: 15,
+  },
+
+  productGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 20,
+    marginTop: 24,
+  },
+
+  productCard: {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 14,
+    padding: 20,
+  },
+
+  productTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  category: {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    color: "#6b7280",
+  },
+
+  inventory: {
+    fontSize: 11,
+    color: "#6b7280",
+  },
+
+  productName: {
+    margin: "14px 0 4px",
+    fontSize: 19,
+  },
+
+  price: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 800,
+  },
+
+  productInfo: {
+    color: "#555",
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  button: {
+    marginTop: 10,
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "1px solid #ccc",
+    background: "#fff",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+
+  error: {
+    padding: 20,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    borderRadius: 10,
+    color: "#b91c1c",
+  },
+};
