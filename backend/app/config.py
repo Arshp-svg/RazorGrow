@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     razorpay_key_id: str
     razorpay_key_secret: str
     groq_api_key: str
+    
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

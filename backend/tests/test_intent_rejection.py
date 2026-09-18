@@ -3,7 +3,7 @@ from app.agents.llm_provider import LLMProvider
 
 
 class BadProvider(LLMProvider):
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, json_mode: bool = False) -> str:
         return "This is not valid JSON."
 
 

@@ -13,6 +13,7 @@ from app.api.cart import router as cart_router
 from app.api.checkout import router as checkout_router
 from app.api.policy import router as policy_router
 from app.api.dashboard import router as dashboard_router
+from app.api.auth import router as auth_router
 
 app = FastAPI(title="RazorGrow API")
 
@@ -24,6 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(products_router)
 app.include_router(intent_router)
 app.include_router(recommendations_router)

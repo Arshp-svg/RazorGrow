@@ -1,7 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.db.database import SessionLocal
 from app.services.dashboard_service import get_dashboard_metrics
 from app.models.models import AuditLog, Order
+from app.api.auth_dependencies import get_current_user
+from app.models.models import User
 
 router = APIRouter(
     prefix="/dashboard",
@@ -9,7 +11,9 @@ router = APIRouter(
 )
 
 @router.get("/status")
-def dashboard_status():
+def dashboard_status(
+    current_user: User = Depends(get_current_user)
+):
     db = SessionLocal()
 
     try:
@@ -25,7 +29,9 @@ def dashboard_status():
         db.close()
         
 @router.get("/metrics")
-def dashboard_metrics():
+def dashboard_metrics(
+    current_user: User = Depends(get_current_user),
+):
     db = SessionLocal()
 
     try:
@@ -36,7 +42,9 @@ def dashboard_metrics():
         
         
 @router.get("/activity")
-def dashboard_activity(limit: int = 20):
+def dashboard_activity(limit: int = 20,
+                       current_user: User = Depends(get_current_user),
+):
     db = SessionLocal()
 
     try:
@@ -65,7 +73,9 @@ def dashboard_activity(limit: int = 20):
         
 
 @router.get("/overview")
-def dashboard_overview(limit: int = 20):
+def dashboard_overview(limit: int = 20,
+                       current_user: User = Depends(get_current_user),
+):
     db = SessionLocal()
 
     try:
@@ -101,7 +111,8 @@ def dashboard_overview(limit: int = 20):
         
         
 @router.get("/orders")
-def dashboard_orders(limit: int = 20):
+def dashboard_orders(limit: int = 20,
+                     current_user: User = Depends(get_current_user),):
     db = SessionLocal()
 
     try:
