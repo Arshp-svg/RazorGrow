@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-
+from app.api.auth_dependencies import get_current_merchant_context
 from app.db.database import SessionLocal
 from app.models.models import Policy
 from app.services.policy_service import evaluate_policy
@@ -27,20 +27,22 @@ def evaluate_policy_endpoint(
     discount: float = 0,
     confirmed: bool = False,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     policy = (
-        db.query(Policy)
-        .order_by(Policy.id.desc())
-        .first()
-    )
+    db.query(Policy)
+    .order_by(Policy.id.desc())
+    .first()
+)
 
     if policy is None:
         policy = Policy(
-            max_order_amount=100000,
-            max_discount=10,
-            confirmation_required=True,
-            approval_threshold=90000,
-        )
+    merchant_id=merchant_context[0].id,
+    max_order_amount=100000,
+    max_discount=10,
+    confirmation_required=True,
+    approval_threshold=90000,
+)
 
     decision = evaluate_policy(
         policy=policy,

@@ -41,6 +41,7 @@ def update_payment_status(
 
     record_audit(
         db=db,
+        merchant_id=order.merchant_id,
         action="payment_status_updated",
         entity_id=str(order.id),
         policy_result=None,

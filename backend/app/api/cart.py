@@ -1,4 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+from app.api.auth_dependencies import (
+    get_current_merchant_context,
+    require_merchant_roles,
+)
+from app.auth.roles import MerchantRole
 from sqlalchemy.orm import Session
 from app.models.models import Cart
 from app.db.database import SessionLocal
@@ -51,11 +56,20 @@ def serialize_cart(cart) -> CartResponse:
 def create_cart(
     request: CreateCartRequest,
     db: Session = Depends(get_db),
-):
-    cart = get_or_create_cart(
-        db,
-        customer_id=request.customer_id,
+    merchant_context=Depends(
+    require_merchant_roles(
+        MerchantRole.OWNER,
+        MerchantRole.ADMIN,
+        MerchantRole.OPERATOR,
     )
+),
+):
+    merchant, _membership = merchant_context
+    cart = get_or_create_cart(
+    db,
+    merchant_id=merchant.id,
+    customer_id=request.customer_id,
+)
 
     return serialize_cart(cart)
 
@@ -68,11 +82,20 @@ def add_cart_item(
     cart_id: int,
     request: AddCartItemRequest,
     db: Session = Depends(get_db),
-    
+    merchant_context=Depends(
+    require_merchant_roles(
+        MerchantRole.OWNER,
+        MerchantRole.ADMIN,
+        MerchantRole.OPERATOR,
+    )
+),
 ):
     cart = (
         db.query(Cart)
-        .filter(Cart.id == cart_id)
+        .filter(
+            Cart.id == cart_id,
+            Cart.merchant_id == merchant_context[0].id,
+        )
         .first()
     )
 
@@ -105,12 +128,16 @@ def add_cart_item(
 def get_cart(
     cart_id: int,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     cart = (
-        db.query(Cart)
-        .filter(Cart.id == cart_id)
-        .first()
+    db.query(Cart)
+    .filter(
+        Cart.id == cart_id,
+        Cart.merchant_id == merchant_context[0].id,
     )
+    .first()
+)
 
     if cart is None:
         raise HTTPException(
@@ -128,12 +155,22 @@ def remove_cart_item(
     cart_id: int,
     product_id: int,
     db: Session = Depends(get_db),
+    merchant_context=Depends(
+    require_merchant_roles(
+        MerchantRole.OWNER,
+        MerchantRole.ADMIN,
+        MerchantRole.OPERATOR,
+    )
+),
 ):
     cart = (
-        db.query(Cart)
-        .filter(Cart.id == cart_id)
-        .first()
+    db.query(Cart)
+    .filter(
+        Cart.id == cart_id,
+        Cart.merchant_id == merchant_context[0].id,
     )
+    .first()
+)
 
     if cart is None:
         raise HTTPException(

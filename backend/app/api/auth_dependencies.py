@@ -5,7 +5,8 @@ import jwt
 
 from app.config import settings
 from app.db.database import SessionLocal
-from app.models.models import User
+from app.auth.roles import MerchantRole
+from app.models.models import Merchant, MerchantMembership, User
 
 
 security = HTTPBearer()
@@ -72,3 +73,56 @@ def get_current_user(
         )
 
     return user
+
+
+def get_current_merchant_context(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> tuple[Merchant, MerchantMembership]:
+    membership = (
+        db.query(MerchantMembership)
+        .filter(
+            MerchantMembership.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of any merchant",
+        )
+
+    merchant = (
+        db.query(Merchant)
+        .filter(
+            Merchant.id == membership.merchant_id,
+            Merchant.status == "active",
+        )
+        .first()
+    )
+
+    if merchant is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Merchant is not active",
+        )
+
+    return merchant, membership
+
+
+def require_merchant_roles(*allowed_roles: MerchantRole):
+    def dependency(
+        merchant_context=Depends(get_current_merchant_context),
+    ):
+        _, membership = merchant_context
+
+        if membership.role not in {role.value for role in allowed_roles}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient merchant role",
+            )
+
+        return merchant_context
+
+    return dependency

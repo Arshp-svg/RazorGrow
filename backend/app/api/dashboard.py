@@ -4,6 +4,7 @@ from app.services.dashboard_service import get_dashboard_metrics
 from app.models.models import AuditLog, Order
 from app.api.auth_dependencies import get_current_user
 from app.models.models import User
+from app.api.auth_dependencies import get_current_merchant_context
 
 router = APIRouter(
     prefix="/dashboard",
@@ -30,12 +31,15 @@ def dashboard_status(
         
 @router.get("/metrics")
 def dashboard_metrics(
-    current_user: User = Depends(get_current_user),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     db = SessionLocal()
 
     try:
-        return get_dashboard_metrics(db)
+        return get_dashboard_metrics(
+    db,
+    merchant_id=merchant_context[0].id,
+)
 
     finally:
         db.close()
@@ -43,17 +47,18 @@ def dashboard_metrics(
         
 @router.get("/activity")
 def dashboard_activity(limit: int = 20,
-                       current_user: User = Depends(get_current_user),
+                      merchant_context=Depends(get_current_merchant_context),
 ):
     db = SessionLocal()
 
     try:
         logs = (
-            db.query(AuditLog)
-            .order_by(AuditLog.id.desc())
-            .limit(limit)
-            .all()
-        )
+    db.query(AuditLog)
+    .filter(AuditLog.merchant_id == merchant_context[0].id)
+    .order_by(AuditLog.id.desc())
+    .limit(limit)
+    .all()
+)
 
         return [
             {
@@ -74,19 +79,23 @@ def dashboard_activity(limit: int = 20,
 
 @router.get("/overview")
 def dashboard_overview(limit: int = 20,
-                       current_user: User = Depends(get_current_user),
+                       merchant_context=Depends(get_current_merchant_context),
 ):
     db = SessionLocal()
 
     try:
-        metrics = get_dashboard_metrics(db)
+        metrics = get_dashboard_metrics(
+    db,
+    merchant_id=merchant_context[0].id,
+)
 
         logs = (
-            db.query(AuditLog)
-            .order_by(AuditLog.id.desc())
-            .limit(limit)
-            .all()
-        )
+    db.query(AuditLog)
+    .filter(AuditLog.merchant_id == merchant_context[0].id)
+    .order_by(AuditLog.id.desc())
+    .limit(limit)
+    .all()
+)
 
         activity = [
             {
@@ -112,16 +121,17 @@ def dashboard_overview(limit: int = 20,
         
 @router.get("/orders")
 def dashboard_orders(limit: int = 20,
-                     current_user: User = Depends(get_current_user),):
+                    merchant_context=Depends(get_current_merchant_context),):
     db = SessionLocal()
 
     try:
         orders = (
-            db.query(Order)
-            .order_by(Order.id.desc())
-            .limit(limit)
-            .all()
-        )
+    db.query(Order)
+    .filter(Order.merchant_id == merchant_context[0].id)
+    .order_by(Order.id.desc())
+    .limit(limit)
+    .all()
+)
 
         return [
             {

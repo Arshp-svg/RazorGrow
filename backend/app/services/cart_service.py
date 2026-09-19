@@ -2,27 +2,29 @@ from sqlalchemy.orm import Session
 
 from app.models.models import Cart, CartItem, Product
 
-
 def get_or_create_cart(
     db: Session,
+    merchant_id: int,
     customer_id: str | None = None,
 ) -> Cart:
     cart = (
-        db.query(Cart)
-        .filter(
-            Cart.customer_id == customer_id,
-            Cart.status == "active",
-        )
-        .first()
+    db.query(Cart)
+    .filter(
+        Cart.merchant_id == merchant_id,
+        Cart.customer_id == customer_id,
+        Cart.status == "active",
     )
+    .first()
+)
 
     if cart is None:
         cart = Cart(
-            customer_id=customer_id,
-            status="active",
-            subtotal=0,
-            total=0,
-        )
+    merchant_id=merchant_id,
+    customer_id=customer_id,
+    status="active",
+    subtotal=0,
+    total=0,
+)
 
         db.add(cart)
         db.commit()
@@ -54,10 +56,13 @@ def add_to_cart(
         )
 
     product = (
-        db.query(Product)
-        .filter(Product.id == product_id)
-        .first()
+    db.query(Product)
+    .filter(
+        Product.id == product_id,
+        Product.merchant_id == cart.merchant_id,
     )
+    .first()
+)
 
     if product is None:
         raise ValueError(

@@ -7,6 +7,7 @@ from app.schemas.recommendation import RecommendationResponse
 from app.services.recommendation_service import recommend_products
 from app.agents.intent_agent import IntentAgent
 from app.schemas.intent import IntentRequest
+from app.api.auth_dependencies import get_current_merchant_context
 from app.agents.recommendation_agent import RecommendationAgent
 
 
@@ -30,9 +31,13 @@ def get_db():
 def get_recommendations(
     intent: ShoppingIntent,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
-    return recommend_products(db, intent)
-
+    return recommend_products(
+        db,
+        intent,
+        merchant_id=merchant_context[0].id,
+    )
 
 @router.post(
     "/from-message",
@@ -41,10 +46,15 @@ def get_recommendations(
 def get_recommendations_from_message(
     request: IntentRequest,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     intent = agent.extract(request.message)
 
-    result = recommend_products(db, intent)
+    result = recommend_products(
+    db,
+    intent,
+    merchant_id=merchant_context[0].id,
+)
 
     explanation = recommendation_agent.explain(
         intent,

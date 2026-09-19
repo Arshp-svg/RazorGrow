@@ -14,6 +14,7 @@ def create_checkout_order(
     db: Session,
     cart_id: int,
     confirmed: bool,
+    merchant_id: int,
 ):
     # if not confirmed:
     #     raise ValueError(
@@ -21,10 +22,13 @@ def create_checkout_order(
     #     )
 
     cart = (
-        db.query(Cart)
-        .filter(Cart.id == cart_id)
-        .first()
+    db.query(Cart)
+    .filter(
+        Cart.id == cart_id,
+        Cart.merchant_id == merchant_id,
     )
+    .first()
+)
 
     if cart is None:
         raise ValueError(
@@ -34,10 +38,11 @@ def create_checkout_order(
     validate_checkout(cart)
     
     policy = (
-        db.query(Policy)
-        .order_by(Policy.id.desc())
-        .first()
-    )
+    db.query(Policy)
+    .filter(Policy.merchant_id == merchant_id)
+    .order_by(Policy.id.desc())
+    .first()
+)
 
     if policy is None:
         raise ValueError(
@@ -53,6 +58,7 @@ def create_checkout_order(
     
     record_audit(
     db=db,
+    merchant_id=merchant_id,
     action="policy_evaluated",
     entity_id=str(cart.id),
     policy_result=decision.decision,
@@ -79,6 +85,7 @@ def create_checkout_order(
     
     record_audit(
     db=db,
+    merchant_id=merchant_id,
     action="razorpay_order_created",
     entity_id=str(cart.id),
     policy_result=decision.decision,
@@ -95,6 +102,7 @@ def create_checkout_order(
     if not amount_verified:
         record_audit(
             db=db,
+            merchant_id=merchant_id,
             action="payment_amount_verification",
             entity_id=str(cart.id),
             policy_result=decision.decision,
@@ -109,6 +117,7 @@ def create_checkout_order(
 
     record_audit(
         db=db,
+        merchant_id=merchant_id,            
         action="payment_amount_verification",
         entity_id=str(cart.id),
         policy_result=decision.decision,
@@ -118,11 +127,12 @@ def create_checkout_order(
     )
     
     local_order = Order(
-        cart_id=cart.id,
-        amount=cart.total,
-        status=razorpay_order["status"],
-        razorpay_order_id=razorpay_order["id"],
-    )
+    merchant_id=merchant_id,
+    cart_id=cart.id,
+    amount=cart.total,
+    status=razorpay_order["status"],
+    razorpay_order_id=razorpay_order["id"],
+)
 
     db.add(local_order)
     db.commit()

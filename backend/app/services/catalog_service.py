@@ -18,10 +18,14 @@ def parse_list(value: str) -> list[str]:
 def find_candidates(
     db: Session,
     intent: ShoppingIntent,
+    merchant_id: int,
 ) -> list[Product]:
     products = (
         db.query(Product)
-        .filter(Product.inventory > 0)
+        .filter(
+    Product.merchant_id == merchant_id,
+    Product.inventory > 0,
+)
         .all()
     )
 

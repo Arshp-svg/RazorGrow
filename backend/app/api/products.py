@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from app.api.auth_dependencies import get_current_merchant_context
 from app.db.database import SessionLocal
 from app.models.models import Product
 from app.schemas.product import ProductResponse
@@ -51,19 +51,29 @@ def product_to_response(product: Product) -> ProductResponse:
 
 
 @router.get("", response_model=list[ProductResponse])
-def get_products(db: Session = Depends(get_db)):
-    products = db.query(Product).all()
+def get_products(db: Session = Depends(get_db),
+                 merchant_context=Depends(get_current_merchant_context),):
+    products = (
+    db.query(Product)
+    .filter(Product.merchant_id == merchant_context[0].id)
+    .all()
+)
 
     return [product_to_response(product) for product in products]
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
-def get_product(product_id: int, db: Session = Depends(get_db)):
+def get_product(product_id: int, db: Session = Depends(get_db),
+                merchant_context=Depends(get_current_merchant_context),
+                ):
     product = (
-        db.query(Product)
-        .filter(Product.id == product_id)
-        .first()
+    db.query(Product)
+    .filter(
+        Product.id == product_id,
+        Product.merchant_id == merchant_context[0].id,
     )
+    .first()
+)
 
     if product is None:
         raise HTTPException(
@@ -78,12 +88,16 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 def get_product_for_agent(
     product_id: int,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     product = (
-        db.query(Product)
-        .filter(Product.id == product_id)
-        .first()
+    db.query(Product)
+    .filter(
+        Product.id == product_id,
+        Product.merchant_id == merchant_context[0].id,
     )
+    .first()
+)
 
     if product is None:
         raise HTTPException(

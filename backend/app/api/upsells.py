@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from app.api.auth_dependencies import get_current_merchant_context
 from app.db.database import SessionLocal
 from app.services.upsell_service import recommend_upsell
 from app.schemas.upsell import (
@@ -31,12 +31,14 @@ def get_db():
 def get_upsell(
     product_id: int,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     try:
         return recommend_upsell(
-            db,
-            product_id,
-        )
+    db,
+    product_id,
+    merchant_context[0].id,
+)
     except ValueError as exc:
         raise HTTPException(
             status_code=404,
@@ -51,6 +53,7 @@ def accept_upsell(
     product_id: int,
     request: UpsellAcceptanceRequest,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     try:
         result = recommend_upsell(

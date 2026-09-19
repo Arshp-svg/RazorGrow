@@ -8,7 +8,11 @@ from app.schemas.checkout import (
     CheckoutConfirmationResponse,
 )
 from app.services.cart_service import validate_checkout
-
+from app.api.auth_dependencies import (
+    get_current_merchant_context,
+    require_merchant_roles,
+)
+from app.auth.roles import MerchantRole
 
 router = APIRouter(
     prefix="/checkout",
@@ -33,12 +37,16 @@ def confirm_checkout(
     cart_id: int,
     request: CheckoutConfirmationRequest,
     db: Session = Depends(get_db),
+    merchant_context=Depends(get_current_merchant_context),
 ):
     cart = (
-        db.query(Cart)
-        .filter(Cart.id == cart_id)
-        .first()
+    db.query(Cart)
+    .filter(
+        Cart.id == cart_id,
+        Cart.merchant_id == merchant_context[0].id,
     )
+    .first()
+)
 
     if cart is None:
         raise HTTPException(
@@ -67,13 +75,21 @@ def create_checkout_payment_order(
     cart_id: int,
     request: CheckoutConfirmationRequest,
     db: Session = Depends(get_db),
+    merchant_context=Depends(
+    require_merchant_roles(
+        MerchantRole.OWNER,
+        MerchantRole.ADMIN,
+        MerchantRole.OPERATOR,
+    )
+),
 ):
     try:
         return create_checkout_order(
-            db,
-            cart_id=cart_id,
-            confirmed=request.confirmed,
-        )
+    db,
+    cart_id=cart_id,
+    confirmed=request.confirmed,
+    merchant_id=merchant_context[0].id,
+)
     except ValueError as exc:
         raise HTTPException(
             status_code=400,

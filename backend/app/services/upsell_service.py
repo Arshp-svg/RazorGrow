@@ -30,13 +30,14 @@ def find_upsell_candidates(
         return []
 
     candidates = (
-        db.query(Product)
-        .filter(
-            Product.id.in_(upsell_ids),
-            Product.inventory > 0,
-        )
-        .all()
+    db.query(Product)
+    .filter(
+        Product.id.in_(upsell_ids),
+        Product.merchant_id == product.merchant_id,
+        Product.inventory > 0,
     )
+    .all()
+)
 
     # Preserve the order defined by upsell_products.
     candidates_by_id = {
@@ -96,13 +97,16 @@ def rank_upsell_candidates(
 def recommend_upsell(
     db: Session,
     product_id: int,
+    merchant_id: int,
 ) -> UpsellResponse:
     product = (
-        db.query(Product)
-        .filter(Product.id == product_id)
-        .first()
+    db.query(Product)
+    .filter(
+        Product.id == product_id,
+        Product.merchant_id == merchant_id,
     )
-
+    .first()
+)
     if product is None:
         raise ValueError(
             f"Product {product_id} not found"

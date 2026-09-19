@@ -5,6 +5,7 @@ from app.models.models import AuditLog
 
 def record_audit(
     db: Session,
+    merchant_id: int,
     action: str,
     entity_id: str | None = None,
     policy_result: str | None = None,
@@ -13,6 +14,7 @@ def record_audit(
     recovery: str | None = None,
 ):
     audit = AuditLog(
+        merchant_id=merchant_id,
         action=action,
         entity_id=entity_id,
         policy_result=policy_result,

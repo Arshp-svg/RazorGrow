@@ -15,8 +15,13 @@ from app.services.catalog_service import (
 def recommend_products(
     db: Session,
     intent: ShoppingIntent,
+    merchant_id: int,
 ) -> RecommendationResponse:
-    candidates = find_candidates(db, intent)
+    candidates = find_candidates(
+        db,
+        intent,
+        merchant_id,
+    )
 
     ranked_candidates = rank_candidates(
         candidates,

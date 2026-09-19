@@ -3,9 +3,15 @@ from sqlalchemy.orm import Session
 from app.models.models import AuditLog, Order
 
 
-def get_dashboard_metrics(db: Session):
-    orders = db.query(Order).all()
-
+def get_dashboard_metrics(
+    db: Session,
+    merchant_id: int,
+):
+    orders = (
+        db.query(Order)
+        .filter(Order.merchant_id == merchant_id)
+        .all()
+    )
     total_orders = len(orders)
 
     successful_payments = sum(
@@ -39,7 +45,11 @@ def get_dashboard_metrics(db: Session):
             audit.entity_id == str(order.id)
             and audit.action == "payment_status_updated"
             and audit.external_result == "failed"
-            for audit in db.query(AuditLog).all()
+            for audit in (
+                db.query(AuditLog)
+                .filter(AuditLog.merchant_id == merchant_id)
+                .all()
+            )
         )
     )
     
@@ -51,13 +61,21 @@ def get_dashboard_metrics(db: Session):
         audit.entity_id == str(order.id)
         and audit.action == "payment_status_updated"
         and audit.external_result == "failed"
-        for audit in db.query(AuditLog).all()
+        for audit in (
+    db.query(AuditLog)
+    .filter(AuditLog.merchant_id == merchant_id)
+    .all()
+)
     )
 )
 
     policy_blocks = sum(
         1
-        for audit in db.query(AuditLog).all()
+        for audit in (
+    db.query(AuditLog)
+    .filter(AuditLog.merchant_id == merchant_id)
+    .all()
+)
         if audit.action == "policy_evaluated"
         and audit.policy_result == "BLOCKED"
     )

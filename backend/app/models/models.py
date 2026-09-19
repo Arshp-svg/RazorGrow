@@ -9,6 +9,13 @@ class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    
+    merchant_id: Mapped[int] = mapped_column(
+    ForeignKey("merchants.id"),
+    nullable=False,
+    index=True,
+)
+    
     name: Mapped[str] = mapped_column(String(255))
     price: Mapped[float] = mapped_column(Float)
 
@@ -37,6 +44,12 @@ class Order(Base):
         primary_key=True,
         index=True,
     )
+    
+    merchant_id: Mapped[int] = mapped_column(
+    ForeignKey("merchants.id"),
+    nullable=False,
+    index=True,
+)
 
     cart_id: Mapped[int] = mapped_column(
         ForeignKey("carts.id"),
@@ -63,6 +76,13 @@ class Cart(Base):
     __tablename__ = "carts"
 
     id = Column(Integer, primary_key=True, index=True)
+    
+    merchant_id = Column(
+    Integer,
+    ForeignKey("merchants.id"),
+    nullable=False,
+    index=True,
+)
 
     customer_id = Column(String, nullable=True)
 
@@ -131,6 +151,13 @@ class Policy(Base):
     __tablename__ = "policies"
 
     id = Column(Integer, primary_key=True, index=True)
+    
+    merchant_id = Column(
+    Integer,
+    ForeignKey("merchants.id"),
+    nullable=False,
+    index=True,
+)
 
     max_order_amount = Column(
         Float,
@@ -165,6 +192,12 @@ class AuditLog(Base):
         primary_key=True,
         index=True,
     )
+    
+    merchant_id: Mapped[int] = mapped_column(
+    ForeignKey("merchants.id"),
+    nullable=False,
+    index=True,
+)
 
     timestamp: Mapped[datetime] = mapped_column(
         DateTime,
@@ -200,7 +233,70 @@ class AuditLog(Base):
         nullable=True,
     )
     
+class Merchant(Base):
+    __tablename__ = "merchants"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="active",
+    )
+
+    settings: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     
+    memberships = relationship(
+    "MerchantMembership",
+    back_populates="merchant",
+    cascade="all, delete-orphan",
+)
+    
+
+class MerchantMembership(Base):
+    __tablename__ = "merchant_memberships"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    merchant_id: Mapped[int] = mapped_column(
+        ForeignKey("merchants.id"),
+        nullable=False,
+        index=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    role: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    merchant = relationship(
+    "Merchant",
+    back_populates="memberships",
+)
+    user = relationship("User")
+     
 class User(Base):
     __tablename__ = "users"
 
@@ -227,6 +323,12 @@ class User(Base):
         nullable=False,
         default=True,
     )
+    
+    memberships = relationship(
+    "MerchantMembership",
+    back_populates="user",
+    cascade="all, delete-orphan",
+)
 
 
 class RefreshToken(Base):
