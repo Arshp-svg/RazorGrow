@@ -42,7 +42,20 @@ type DashboardOverview = {
   activity: Activity[];
 };
 
+type ApprovalRequest = {
+  id: number;
+  merchant_id: number;
+  order_id: number;
+  status: string;
+  requested_at: string;
+  expires_at: string | null;
+  decided_at: string | null;
+  decided_by_user_id: number | null;
+  decision_reason: string | null;
+};
+
 const API = "http://127.0.0.1:8000";
+const ACCESS_TOKEN_KEY = "razorgrow_access_token";
 
 function money(value: number) {
   return `₹${value.toLocaleString("en-IN")}`;
@@ -51,64 +64,349 @@ function money(value: number) {
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
+
   const [dashboard, setDashboard] =
     useState<DashboardOverview | null>(null);
 
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+
+  const [approvalsLoading, setApprovalsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+
   const [error, setError] = useState("");
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // IMPORTANT:
+  // Keep the actual token in React state instead of repeatedly
+  // reading localStorage inside different effects.
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  /*
+   * Restore authentication after a page refresh.
+   *
+   * We do NOT read localStorage inside useState because that can cause
+   * a Next.js hydration mismatch.
+   */
   useEffect(() => {
+    const token = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+
+    if (token) {
+      setAccessToken(token);
+      setLoggedIn(true);
+    } else {
+      setAccessToken(null);
+      setLoggedIn(false);
+    }
+
+    setAuthChecked(true);
+  }, []);
+
+  /*
+   * Load dashboard data only after authentication has been checked
+   * AND a real access token exists.
+   */
+  useEffect(() => {
+    if (!authChecked || !accessToken || !loggedIn) {
+      return;
+    }
+
+    const token = accessToken;
+
+    console.log(
+      "Dashboard auth token present:",
+      token ? `${token.slice(0, 10)}...` : "NO TOKEN",
+    );
+
+    const authHeaders = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    setLoading(true);
+    setDashboardLoading(true);
+    setApprovalsLoading(true);
+    setError("");
+
     Promise.all([
-      fetch(`${API}/products`).then((response) => {
+      fetch(`${API}/products`, {
+        headers: authHeaders,
+      }).then(async (response) => {
         if (!response.ok) {
-          throw new Error("Failed to load products");
+          const body = await response.text();
+
+          console.error(
+            "Products API failed:",
+            response.status,
+            body,
+          );
+
+          throw new Error(
+            `Products API failed: ${response.status}`,
+          );
         }
 
         return response.json();
       }),
 
-      fetch(`${API}/dashboard/overview?limit=10`).then((response) => {
+      fetch(`${API}/dashboard/overview?limit=10`, {
+        headers: authHeaders,
+      }).then(async (response) => {
         if (!response.ok) {
-          throw new Error("Failed to load dashboard");
+          const body = await response.text();
+
+          console.error(
+            "Dashboard API failed:",
+            response.status,
+            body,
+          );
+
+          /*
+           * If the backend rejects the token, stop treating the
+           * browser as authenticated.
+           */
+          if (response.status === 401) {
+            window.localStorage.removeItem(
+              ACCESS_TOKEN_KEY,
+            );
+
+            setAccessToken(null);
+            setLoggedIn(false);
+          }
+
+          throw new Error(
+            `Dashboard API failed: ${response.status}`,
+          );
+        }
+
+        return response.json();
+      }),
+
+      fetch(`${API}/approvals`, {
+        headers: authHeaders,
+      }).then(async (response) => {
+        if (!response.ok) {
+          const body = await response.text();
+
+          console.error(
+            "Approvals API failed:",
+            response.status,
+            body,
+          );
+
+          if (response.status === 401) {
+            window.localStorage.removeItem(
+              ACCESS_TOKEN_KEY,
+            );
+
+            setAccessToken(null);
+            setLoggedIn(false);
+          }
+
+          throw new Error(
+            `Approvals API failed: ${response.status}`,
+          );
         }
 
         return response.json();
       }),
     ])
-      .then(([productData, dashboardData]) => {
-        setProducts(productData);
-        setDashboard(dashboardData);
-        setLoading(false);
-        setDashboardLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setError("Could not connect to the RazorGrow backend.");
-        setLoading(false);
-        setDashboardLoading(false);
-      });
-  }, []);
-
-  const filteredProducts = products.filter((product) => {
-    const query = search.toLowerCase().trim();
-
-    if (!query) {
-      return true;
-    }
-
-    return (
-      product.name.toLowerCase().includes(query) ||
-      product.category.toLowerCase().includes(query) ||
-      product.tags.some((tag) =>
-        tag.toLowerCase().includes(query)
-      ) ||
-      product.use_cases.some((useCase) =>
-        useCase.toLowerCase().includes(query)
+      .then(
+        ([
+          productData,
+          dashboardData,
+          approvalData,
+        ]) => {
+          setProducts(productData);
+          setDashboard(dashboardData);
+          setApprovals(approvalData);
+        },
       )
-    );
-  });
+      .catch((err) => {
+        console.error("RazorGrow data loading error:", err);
 
+        /*
+         * Don't overwrite the login state error when a 401
+         * has already moved us back to the login screen.
+         */
+        if (
+          window.localStorage.getItem(
+            ACCESS_TOKEN_KEY,
+          )
+        ) {
+          setError(
+            "Could not connect to the RazorGrow backend.",
+          );
+        }
+      })
+      .finally(() => {
+        setLoading(false);
+        setDashboardLoading(false);
+        setApprovalsLoading(false);
+      });
+  }, [authChecked, accessToken, loggedIn]);
+
+  const filteredProducts = products.filter(
+    (product) => {
+      const query = search.toLowerCase().trim();
+
+      if (!query) {
+        return true;
+      }
+
+      return (
+        product.name.toLowerCase().includes(query) ||
+        product.category.toLowerCase().includes(query) ||
+        product.tags.some((tag) =>
+          tag.toLowerCase().includes(query),
+        ) ||
+        product.use_cases.some((useCase) =>
+          useCase.toLowerCase().includes(query),
+        )
+      );
+    },
+  );
+
+  /*
+   * Prevent hydration mismatch.
+   */
+  if (!authChecked) {
+    return null;
+  }
+
+  /*
+   * Login screen.
+   */
+  if (!loggedIn) {
+    return (
+      <main style={styles.page}>
+        <section style={styles.loginCard}>
+          <div style={styles.brand}>RazorGrow</div>
+
+          <p style={styles.subtitle}>
+            Sign in to access the merchant dashboard.
+          </p>
+
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(event) =>
+              setEmail(event.target.value)
+            }
+            style={styles.search}
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(event) =>
+              setPassword(event.target.value)
+            }
+            style={styles.search}
+          />
+
+          <button
+            type="button"
+            disabled={loginLoading}
+            onClick={async () => {
+              setLoginLoading(true);
+              setError("");
+
+              try {
+                const response = await fetch(
+                  `${API}/auth/login`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type":
+                        "application/json",
+                    },
+                    body: JSON.stringify({
+                      email,
+                      password,
+                    }),
+                  },
+                );
+
+                if (!response.ok) {
+                  const body =
+                    await response.text();
+
+                  console.error(
+                    "Login API failed:",
+                    response.status,
+                    body,
+                  );
+
+                  throw new Error(
+                    `Login failed: ${response.status}`,
+                  );
+                }
+
+                const data =
+                  await response.json();
+
+                const token =
+                  data.access_token;
+
+                if (!token) {
+                  throw new Error(
+                    "Login response did not contain an access token",
+                  );
+                }
+
+                /*
+                 * Store the token first.
+                 */
+                window.localStorage.setItem(
+                  ACCESS_TOKEN_KEY,
+                  token,
+                );
+
+                /*
+                 * Then update React state.
+                 * This causes the authenticated data
+                 * loading effect to run.
+                 */
+                setAccessToken(token);
+                setLoggedIn(true);
+              } catch (err) {
+                console.error(err);
+
+                setError(
+                  "Invalid email or password.",
+                );
+              } finally {
+                setLoginLoading(false);
+              }
+            }}
+            style={styles.button}
+          >
+            {loginLoading
+              ? "Signing in..."
+              : "Sign in"}
+          </button>
+
+          {error && (
+            <div style={styles.error}>
+              {error}
+            </div>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  /*
+   * Loading state.
+   */
   if (loading) {
     return (
       <main style={styles.page}>
@@ -117,10 +415,15 @@ export default function Home() {
     );
   }
 
+  /*
+   * Error state.
+   */
   if (error) {
     return (
       <main style={styles.page}>
-        <div style={styles.error}>{error}</div>
+        <div style={styles.error}>
+          {error}
+        </div>
       </main>
     );
   }
@@ -130,7 +433,10 @@ export default function Home() {
       {/* Header */}
       <header style={styles.header}>
         <div>
-          <div style={styles.brand}>RazorGrow</div>
+          <div style={styles.brand}>
+            RazorGrow
+          </div>
+
           <div style={styles.subtitle}>
             Autonomous AI Revenue Agent
           </div>
@@ -146,9 +452,13 @@ export default function Home() {
       <section style={styles.dashboard}>
         <div style={styles.sectionHeader}>
           <div>
-            <h1 style={styles.title}>Merchant Dashboard</h1>
+            <h1 style={styles.title}>
+              Merchant Dashboard
+            </h1>
+
             <p style={styles.muted}>
-              Revenue intelligence, payment recovery and agent activity
+              Revenue intelligence, payment recovery
+              and agent activity
             </p>
           </div>
         </div>
@@ -160,20 +470,24 @@ export default function Home() {
             <div style={styles.metricsGrid}>
               <MetricCard
                 label="Revenue"
-                value={money(dashboard.metrics.revenue)}
+                value={money(
+                  dashboard.metrics.revenue,
+                )}
               />
 
               <MetricCard
                 label="Recovered Revenue"
                 value={money(
-                  dashboard.metrics.recovered_revenue
+                  dashboard.metrics
+                    .recovered_revenue,
                 )}
               />
 
               <MetricCard
                 label="Average Order"
                 value={money(
-                  dashboard.metrics.average_order_value
+                  dashboard.metrics
+                    .average_order_value,
                 )}
               />
 
@@ -209,68 +523,299 @@ export default function Home() {
             <div style={styles.activityCard}>
               <div style={styles.activityHeader}>
                 <div>
-                  <h2 style={styles.cardTitle}>Agent Activity</h2>
+                  <h2 style={styles.cardTitle}>
+                    Agent Activity
+                  </h2>
+
                   <p style={styles.muted}>
-                    Recent autonomous decisions and payment events
+                    Recent autonomous decisions and
+                    payment events
                   </p>
                 </div>
 
-                <span style={styles.liveBadge}>LIVE DATA</span>
+                <span style={styles.liveBadge}>
+                  LIVE DATA
+                </span>
               </div>
 
-              {dashboard.activity.map((activity) => (
-                <div
-                  key={activity.id}
-                  style={styles.activityRow}
-                >
-                  <div style={styles.activityMain}>
-                    <strong>
-                      {formatAction(activity.action)}
-                    </strong>
+              {dashboard.activity.map(
+                (activity) => (
+                  <div
+                    key={activity.id}
+                    style={styles.activityRow}
+                  >
+                    <div
+                      style={styles.activityMain}
+                    >
+                      <strong>
+                        {formatAction(
+                          activity.action,
+                        )}
+                      </strong>
 
-                    <span style={styles.entity}>
-                      Entity #{activity.entity_id}
-                    </span>
+                      <span
+                        style={styles.entity}
+                      >
+                        Entity #
+                        {activity.entity_id}
+                      </span>
+                    </div>
+
+                    <div
+                      style={
+                        styles.activityResult
+                      }
+                    >
+                      {activity.policy_result && (
+                        <span
+                          style={
+                            styles.approved
+                          }
+                        >
+                          {
+                            activity.policy_result
+                          }
+                        </span>
+                      )}
+
+                      {activity.external_result && (
+                        <span
+                          style={
+                            styles.external
+                          }
+                        >
+                          {
+                            activity.external_result
+                          }
+                        </span>
+                      )}
+
+                      {activity.recovery && (
+                        <span
+                          style={
+                            styles.recovery
+                          }
+                        >
+                          {activity.recovery}
+                        </span>
+                      )}
+
+                      {activity.error && (
+                        <span
+                          style={styles.failed}
+                        >
+                          {activity.error}
+                        </span>
+                      )}
+                    </div>
                   </div>
-
-                  <div style={styles.activityResult}>
-                    {activity.policy_result && (
-                      <span style={styles.approved}>
-                        {activity.policy_result}
-                      </span>
-                    )}
-
-                    {activity.external_result && (
-                      <span style={styles.external}>
-                        {activity.external_result}
-                      </span>
-                    )}
-
-                    {activity.recovery && (
-                      <span style={styles.recovery}>
-                        {activity.recovery}
-                      </span>
-                    )}
-
-                    {activity.error && (
-                      <span style={styles.failed}>
-                        {activity.error}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ),
+              )}
             </div>
           </>
         ) : null}
       </section>
 
+      {/* Approval Center */}
+      <section style={styles.catalog}>
+        <div>
+          <h2 style={styles.title}>
+            Approval Center
+          </h2>
+
+          <p style={styles.muted}>
+            Review and manage merchant approval
+            requests.
+          </p>
+        </div>
+
+        {approvalsLoading ? (
+          <p>Loading approvals...</p>
+        ) : approvals.length === 0 ? (
+          <div style={styles.activityCard}>
+            <div style={styles.activityRow}>
+              <span>
+                No approval requests.
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div style={styles.activityCard}>
+            {approvals.map((approval) => (
+              <div
+                key={approval.id}
+                style={styles.activityRow}
+              >
+                <div
+                  style={styles.activityMain}
+                >
+                  <strong>
+                    Approval #{approval.id}
+                  </strong>
+
+                  <span
+                    style={styles.entity}
+                  >
+                    Order #{approval.order_id}
+                  </span>
+
+                  <span
+                    style={styles.entity}
+                  >
+                    Status: {approval.status}
+                  </span>
+                </div>
+
+                {approval.status ===
+                  "PENDING" && (
+                  <div
+                    style={
+                      styles.approvalActions
+                    }
+                  >
+                    <button
+                      type="button"
+                      style={styles.button}
+                      onClick={async () => {
+                        setError("");
+
+                        try {
+                          const response =
+                            await fetch(
+                              `${API}/approvals/${approval.id}/approve`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type":
+                                    "application/json",
+                                  Authorization: `Bearer ${accessToken ?? ""}`,
+                                },
+                                body: JSON.stringify(
+                                  {},
+                                ),
+                              },
+                            );
+
+                          if (!response.ok) {
+                            const body =
+                              await response.text();
+
+                            console.error(
+                              "Approval failed:",
+                              response.status,
+                              body,
+                            );
+
+                            throw new Error(
+                              "Approval failed",
+                            );
+                          }
+
+                          const updated =
+                            await response.json();
+
+                          setApprovals(
+                            (current) =>
+                              current.map(
+                                (item) =>
+                                  item.id ===
+                                  updated.id
+                                    ? updated
+                                    : item,
+                              ),
+                          );
+                        } catch (err) {
+                          console.error(err);
+
+                          setError(
+                            "Could not approve the request.",
+                          );
+                        }
+                      }}
+                    >
+                      Approve
+                    </button>
+
+                    <button
+                      type="button"
+                      style={styles.button}
+                      onClick={async () => {
+                        setError("");
+
+                        try {
+                          const response =
+                            await fetch(
+                              `${API}/approvals/${approval.id}/reject`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type":
+                                    "application/json",
+                                  Authorization: `Bearer ${accessToken ?? ""}`,
+                                },
+                                body: JSON.stringify(
+                                  {},
+                                ),
+                              },
+                            );
+
+                          if (!response.ok) {
+                            const body =
+                              await response.text();
+
+                            console.error(
+                              "Rejection failed:",
+                              response.status,
+                              body,
+                            );
+
+                            throw new Error(
+                              "Rejection failed",
+                            );
+                          }
+
+                          const updated =
+                            await response.json();
+
+                          setApprovals(
+                            (current) =>
+                              current.map(
+                                (item) =>
+                                  item.id ===
+                                  updated.id
+                                    ? updated
+                                    : item,
+                              ),
+                          );
+                        } catch (err) {
+                          console.error(err);
+
+                          setError(
+                            "Could not reject the request.",
+                          );
+                        }
+                      }}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Product Catalog */}
       <section style={styles.catalog}>
         <div>
-          <h2 style={styles.title}>Merchant Catalog</h2>
+          <h2 style={styles.title}>
+            Merchant Catalog
+          </h2>
+
           <p style={styles.muted}>
-            Discover products and demonstrate the revenue-agent flow.
+            Discover products and demonstrate the
+            revenue-agent flow.
           </p>
         </div>
 
@@ -278,7 +823,9 @@ export default function Home() {
           type="text"
           placeholder="Search products..."
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) =>
+            setSearch(event.target.value)
+          }
           style={styles.search}
         />
 
@@ -289,16 +836,22 @@ export default function Home() {
               style={styles.productCard}
             >
               <div style={styles.productTop}>
-                <span style={styles.category}>
+                <span
+                  style={styles.category}
+                >
                   {product.category}
                 </span>
 
-                <span style={styles.inventory}>
+                <span
+                  style={styles.inventory}
+                >
                   Stock: {product.inventory}
                 </span>
               </div>
 
-              <h3 style={styles.productName}>
+              <h3
+                style={styles.productName}
+              >
                 {product.name}
               </h3>
 
@@ -306,35 +859,62 @@ export default function Home() {
                 {money(product.price)}
               </p>
 
-              <p style={styles.productInfo}>
-                <strong>Use cases:</strong>{" "}
-                {product.use_cases.join(", ")}
+              <p
+                style={styles.productInfo}
+              >
+                <strong>
+                  Use cases:
+                </strong>{" "}
+                {product.use_cases.join(
+                  ", ",
+                )}
               </p>
 
-              <p style={styles.productInfo}>
+              <p
+                style={styles.productInfo}
+              >
                 <strong>Tags:</strong>{" "}
                 {product.tags.join(", ")}
               </p>
 
               <button
                 onClick={async () => {
-                  const response = await fetch(
-                    `${API}/products/${product.id}`
-                  );
+                  try {
+                    const response =
+                      await fetch(
+                        `${API}/products/${product.id}`,
+                        {
+                          headers: {
+                            Authorization: `Bearer ${accessToken ?? ""}`,
+                          },
+                        },
+                      );
 
-                  if (!response.ok) {
-                    alert("Could not load product details.");
-                    return;
+                    if (!response.ok) {
+                      alert(
+                        "Could not load product details.",
+                      );
+                      return;
+                    }
+
+                    const details =
+                      await response.json();
+
+                    alert(
+                      `${details.name}\n\n` +
+                        `Price: ${money(
+                          details.price,
+                        )}\n` +
+                        `Category: ${details.category}\n` +
+                        `Inventory: ${details.inventory}`,
+                    );
+                  } catch (err) {
+                    console.error(err);
+
+                    alert(
+                      "Could not load product details.",
+                    );
                   }
-
-                  const details = await response.json();
-
-                  alert(
-                    `${details.name}\n\n` +
-                      `Price: ${money(details.price)}\n` +
-                      `Category: ${details.category}\n` +
-                      `Inventory: ${details.inventory}`
-                  );
                 }}
                 style={styles.button}
               >
@@ -357,8 +937,13 @@ function MetricCard({
 }) {
   return (
     <div style={styles.metricCard}>
-      <div style={styles.metricLabel}>{label}</div>
-      <div style={styles.metricValue}>{value}</div>
+      <div style={styles.metricLabel}>
+        {label}
+      </div>
+
+      <div style={styles.metricValue}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -366,10 +951,15 @@ function MetricCard({
 function formatAction(action: string) {
   return action
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase(),
+    );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: "100vh",
     padding: "32px",
@@ -458,7 +1048,8 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #e5e7eb",
     borderRadius: 14,
     padding: 20,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+    boxShadow:
+      "0 1px 2px rgba(0,0,0,0.04)",
   },
 
   metricLabel: {
@@ -648,5 +1239,22 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #fecaca",
     borderRadius: 10,
     color: "#b91c1c",
+  },
+
+  loginCard: {
+    maxWidth: 420,
+    margin: "80px auto",
+    padding: 28,
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 14,
+    boxShadow:
+      "0 4px 12px rgba(0,0,0,0.05)",
+  },
+
+  approvalActions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
   },
 };

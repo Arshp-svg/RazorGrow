@@ -29,20 +29,20 @@ def evaluate_policy_endpoint(
     db: Session = Depends(get_db),
     merchant_context=Depends(get_current_merchant_context),
 ):
-    policy = (
-    db.query(Policy)
-    .order_by(Policy.id.desc())
-    .first()
-)
+    merchant_id = merchant_context[0].id
 
-    if policy is None:
-        policy = Policy(
+    policy = (
+        db.query(Policy)
+        .filter(Policy.merchant_id == merchant_id)
+        .order_by(Policy.id.desc())
+        .first()
+    )
     merchant_id=merchant_context[0].id,
     max_order_amount=100000,
     max_discount=10,
     confirmation_required=True,
     approval_threshold=90000,
-)
+
 
     decision = evaluate_policy(
         policy=policy,

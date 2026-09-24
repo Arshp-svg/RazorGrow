@@ -7,9 +7,11 @@ db = SessionLocal()
 try:
     audit = record_audit(
         db=db,
+        merchant_id=3,
         action="test_event",
         entity_id="day9-test",
-        policy_result="APPROVED",
+        policy_result="ALLOW",
+        policy_version=1,
         external_result="created",
         recovery="none",
     )

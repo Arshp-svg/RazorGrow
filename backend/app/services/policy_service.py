@@ -18,7 +18,7 @@ def evaluate_policy(
 
     if order_amount > policy.max_order_amount:
         return PolicyDecision(
-            decision="BLOCKED",
+            decision="BLOCK",
             reason=(
                 "Order amount exceeds the maximum "
                 "allowed transaction amount."
@@ -27,7 +27,7 @@ def evaluate_policy(
 
     if discount > policy.max_discount:
         return PolicyDecision(
-            decision="BLOCKED",
+            decision="BLOCK",
             reason=(
                 "Requested discount exceeds the "
                 "maximum allowed discount."
@@ -36,7 +36,7 @@ def evaluate_policy(
 
     if policy.confirmation_required and not confirmed:
         return PolicyDecision(
-            decision="BLOCKED",
+            decision="BLOCK",
             reason=(
                 "Customer confirmation is required "
                 "before proceeding."
@@ -56,6 +56,6 @@ def evaluate_policy(
         )
 
     return PolicyDecision(
-        decision="APPROVED",
+        decision="ALLOW",
         reason="Order satisfies all merchant policies.",
     )

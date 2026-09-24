@@ -77,7 +77,7 @@ def get_dashboard_metrics(
     .all()
 )
         if audit.action == "policy_evaluated"
-        and audit.policy_result == "BLOCKED"
+        and audit.policy_result == "BLOCK"
     )
 
     average_order_value = (

@@ -62,12 +62,13 @@ def create_checkout_order(
     action="policy_evaluated",
     entity_id=str(cart.id),
     policy_result=decision.decision,
+    policy_version=policy.version,
     external_result=None,
     error=None,
     recovery=None,
 )
 
-    if decision.decision != "APPROVED":
+    if decision.decision != "ALLOW":
         raise ValueError(
             f"Policy blocked checkout: "
             f"{decision.reason}"
@@ -89,6 +90,7 @@ def create_checkout_order(
     action="razorpay_order_created",
     entity_id=str(cart.id),
     policy_result=decision.decision,
+    policy_version=policy.version,
     external_result=razorpay_order["id"],
     error=None,
     recovery=None,
@@ -106,6 +108,7 @@ def create_checkout_order(
             action="payment_amount_verification",
             entity_id=str(cart.id),
             policy_result=decision.decision,
+            policy_version=policy.version,
             external_result="amount_mismatch",
             error="Payment amount verification failed",
             recovery="checkout_blocked",
@@ -121,6 +124,7 @@ def create_checkout_order(
         action="payment_amount_verification",
         entity_id=str(cart.id),
         policy_result=decision.decision,
+        policy_version=policy.version,
         external_result="amount_verified",
         error=None,
         recovery=None,
@@ -147,3 +151,4 @@ def create_checkout_order(
     "razorpay_order_id": razorpay_order["id"],
     "status": local_order.status,
 } 
+

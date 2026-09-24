@@ -72,6 +72,60 @@ class Order(Base):
     )
     
 
+class ApprovalRequest(Base):
+    __tablename__ = "approval_requests"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    merchant_id: Mapped[int] = mapped_column(
+        ForeignKey("merchants.id"),
+        nullable=False,
+        index=True,
+    )
+
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id"),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="PENDING",
+    )
+
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    decided_by_user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    decision_reason: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+
 class Cart(Base):
     __tablename__ = "carts"
 
@@ -153,12 +207,17 @@ class Policy(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     merchant_id = Column(
-    Integer,
-    ForeignKey("merchants.id"),
-    nullable=False,
-    index=True,
-)
+        Integer,
+        ForeignKey("merchants.id"),
+        nullable=False,
+        index=True,
+    )
 
+    version = Column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
     max_order_amount = Column(
         Float,
         nullable=False,
@@ -204,6 +263,12 @@ class AuditLog(Base):
         default=datetime.utcnow,
     )
 
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
     action: Mapped[str] = mapped_column(
         String(100)
     )
@@ -215,6 +280,11 @@ class AuditLog(Base):
 
     policy_result: Mapped[str | None] = mapped_column(
         String(50),
+        nullable=True,
+    )
+
+    policy_version: Mapped[int | None] = mapped_column(
+        Integer,
         nullable=True,
     )
 
@@ -361,3 +431,4 @@ class RefreshToken(Base):
         nullable=False,
         default=False,
     )
+
