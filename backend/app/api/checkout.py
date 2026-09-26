@@ -85,10 +85,11 @@ def create_checkout_payment_order(
 ):
     try:
         return create_checkout_order(
-    db,
-    cart_id=cart_id,
-    confirmed=request.confirmed,
-    merchant_id=merchant_context[0].id,
+        db,
+        cart_id=cart_id,
+        confirmed=request.confirmed,
+        merchant_id=merchant_context[0].id,
+        idempotency_key=request.idempotency_key,
 )
     except ValueError as exc:
         raise HTTPException(

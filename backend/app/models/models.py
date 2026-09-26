@@ -55,6 +55,11 @@ class Order(Base):
         ForeignKey("carts.id"),
         nullable=False,
     )
+    
+    idempotency_key: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
 
     amount: Mapped[float] = mapped_column(
         Float,

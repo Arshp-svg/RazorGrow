@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class CheckoutConfirmationRequest(BaseModel):
     confirmed: bool
+    idempotency_key: str
 
 
 class CheckoutConfirmationResponse(BaseModel):

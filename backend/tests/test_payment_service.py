@@ -18,18 +18,20 @@ try:
     db.refresh(cart)
 
     order = Order(
-        cart_id=cart.id,
-        amount=62000,
-        status="created",
-        razorpay_order_id="order_test_payment_service_v2",
-    )
+    merchant_id=1,
+    cart_id=cart.id,
+    idempotency_key="day7-payment-service-test-unique",
+    amount=62000,
+    status="created",
+    razorpay_order_id="order_day7_payment_service_test",
+)
 
     db.add(order)
     db.commit()
 
     order = update_payment_status(
         db=db,
-        razorpay_order_id="order_test_payment_service_v2",
+        razorpay_order_id="order_day7_payment_service_test",
         status="paid",
     )
 

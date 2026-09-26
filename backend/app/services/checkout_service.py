@@ -15,7 +15,29 @@ def create_checkout_order(
     cart_id: int,
     confirmed: bool,
     merchant_id: int,
+    idempotency_key: str,
 ):
+    existing_order = (
+        db.query(Order)
+        .filter(
+            Order.merchant_id == merchant_id,
+            Order.idempotency_key == idempotency_key,
+        )
+        .first()
+    )
+
+    if existing_order is not None:
+        return {
+            "local_order_id": existing_order.id,
+            "cart_id": existing_order.cart_id,
+            "amount": existing_order.amount,
+            "amount_in_paise": int(
+                round(existing_order.amount * 100)
+            ),
+            "currency": "INR",
+            "razorpay_order_id": existing_order.razorpay_order_id,
+            "status": existing_order.status,
+        }
     # if not confirmed:
     #     raise ValueError(
     #         "Checkout requires explicit customer confirmation"
@@ -133,6 +155,7 @@ def create_checkout_order(
     local_order = Order(
     merchant_id=merchant_id,
     cart_id=cart.id,
+    idempotency_key=idempotency_key,
     amount=cart.total,
     status=razorpay_order["status"],
     razorpay_order_id=razorpay_order["id"],
