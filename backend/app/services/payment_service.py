@@ -1,6 +1,14 @@
 from sqlalchemy.orm import Session
-from app.services.audit_service import record_audit
+
 from app.models.models import Order
+from app.services.audit_service import record_audit
+
+
+PAYMENT_TRANSITIONS = {
+    "created": {"paid", "failed"},
+    "failed": {"paid"},
+    "paid": set(),
+}
 
 
 def update_payment_status(
@@ -8,12 +16,7 @@ def update_payment_status(
     razorpay_order_id: str,
     status: str,
 ):
-    allowed_statuses = {
-        "paid",
-        "failed",
-    }
-
-    if status not in allowed_statuses:
+    if status not in PAYMENT_TRANSITIONS:
         raise ValueError(
             f"Invalid payment status: {status}"
         )
@@ -32,9 +35,15 @@ def update_payment_status(
             "Order not found"
         )
 
-    if order.status == "paid":
+    allowed_next_states = PAYMENT_TRANSITIONS.get(
+        order.status,
+        set(),
+    )
+
+    if status not in allowed_next_states:
         raise ValueError(
-            "Order is already paid"
+            f"Invalid payment state transition: "
+            f"{order.status} -> {status}"
         )
 
     order.status = status
@@ -54,6 +63,7 @@ def update_payment_status(
         ),
     )
 
+    db.commit()
     db.refresh(order)
 
     return order
