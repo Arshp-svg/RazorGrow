@@ -117,9 +117,7 @@ def agent_chat(
             )
             latency_upsell = (time.perf_counter() - t0) * 1000
 
-            top_upsell = (
-                upsell_resp.upsells[0] if upsell_resp.upsells else None
-            )
+            top_upsell = upsell_resp.upsell
             if top_upsell:
                 upsell_product = {
                     "id": top_upsell.product_id,

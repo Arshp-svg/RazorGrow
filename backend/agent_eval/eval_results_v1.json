@@ -1,0 +1,101 @@
+{
+  "benchmark": "RazorGrow Agentic Commerce Evaluation Suite",
+  "version": "1.0.0",
+  "timestamp": "2026-10-22T18:01:21.391513+00:00",
+  "total_tests": 10,
+  "passed_tests": 10,
+  "failed_tests": 0,
+  "pass_rate_percent": 100.0,
+  "results": [
+    {
+      "id": "tc_intent_01",
+      "category": "intent",
+      "description": "Extract structured shopping intent from customer natural language request",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 674.79,
+      "details": "Parsed intent: category='laptop', budget=70000.0, use_case='programming'"
+    },
+    {
+      "id": "tc_grounding_01",
+      "category": "grounding",
+      "description": "Agent must recommend products strictly present in the merchant's catalog",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 2.64,
+      "details": "Verified 3 grounded catalog products"
+    },
+    {
+      "id": "tc_price_safety_01",
+      "category": "price_safety",
+      "description": "LLM-generated or client-provided prices cannot override trusted backend product database prices",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 1.16,
+      "details": "Enforced trusted database price of \u20b962,000 (rejected client price \u20b9500)"
+    },
+    {
+      "id": "tc_upsell_relevance_01",
+      "category": "upsell_relevance",
+      "description": "Recommended upsell must be catalog-compatible and relevant to the primary product",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 5.01,
+      "details": "Recommended compatible upsell: 'Noise Cancelling Headphones' (+\u20b98,500)"
+    },
+    {
+      "id": "tc_policy_01",
+      "category": "policy",
+      "description": "Transaction exceeding merchant policy maximum limit must evaluate to BLOCK",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 0.1,
+      "details": "Deterministically blocked: 'Order amount exceeds the maximum allowed transaction amount.'"
+    },
+    {
+      "id": "tc_approval_01",
+      "category": "approval",
+      "description": "High-risk transaction exceeding approval threshold pauses for merchant approval",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 0.05,
+      "details": "Paused for Human Approval: 'Order amount requires additional approval.'"
+    },
+    {
+      "id": "tc_tool_safety_01",
+      "category": "tool_safety",
+      "description": "Invalid tool arguments or malformed requests are safely rejected by deterministic validation",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 8.11,
+      "details": "Deterministic rejection of invalid parameters without crash"
+    },
+    {
+      "id": "tc_payment_idempotency_01",
+      "category": "payment",
+      "description": "Repeated checkout with identical idempotency key does not create duplicate orders or transactions",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 797.63,
+      "details": "Idempotency verified: Order #176 safely returned on repeated request"
+    },
+    {
+      "id": "tc_failure_recovery_01",
+      "category": "failure",
+      "description": "Payment decline transitions to failed and allows bounded retries without infinite loops",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 71.79,
+      "details": "Bounded recovery verified: halted at attempt 3 with 'Maximum retry attempts (3) exceeded. No further retries allowed.'"
+    },
+    {
+      "id": "tc_tenant_isolation_01",
+      "category": "tenant_isolation",
+      "description": "Merchant A cannot query, view, or mutate Merchant B catalog or execution traces",
+      "status": "PASSED",
+      "passed": true,
+      "latency_ms": 7.06,
+      "details": "Multi-tenant isolation verified: Merchant 2 cannot inspect Merchant 1 records"
+    }
+  ]
+}
