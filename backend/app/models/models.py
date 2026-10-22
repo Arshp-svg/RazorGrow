@@ -76,6 +76,47 @@ class Order(Base):
         nullable=True,
     )
     
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    provider_event_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    processed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    payload_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    
 
 class ApprovalRequest(Base):
     __tablename__ = "approval_requests"
@@ -435,5 +476,128 @@ class RefreshToken(Base):
         Boolean,
         nullable=False,
         default=False,
+    )
+
+
+class AgentExecution(Base):
+    __tablename__ = "agent_executions"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    merchant_id: Mapped[int] = mapped_column(
+        ForeignKey("merchants.id"),
+        nullable=False,
+        index=True,
+    )
+
+    session_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    correlation_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    intent: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="started",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    total_latency_ms: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        default=0.0,
+    )
+
+    tool_calls = relationship(
+        "ToolCall",
+        back_populates="execution",
+        cascade="all, delete-orphan",
+        order_by="ToolCall.id",
+    )
+
+
+class ToolCall(Base):
+    __tablename__ = "tool_calls"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    execution_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_executions.id"),
+        nullable=False,
+        index=True,
+    )
+
+    tool_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    input_data: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    output_data: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="success",
+    )
+
+    latency_ms: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+    )
+
+    policy_result: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    execution = relationship(
+        "AgentExecution",
+        back_populates="tool_calls",
     )
 

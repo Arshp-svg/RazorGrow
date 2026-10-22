@@ -54,6 +54,43 @@ type ApprovalRequest = {
   decision_reason: string | null;
 };
 
+type ExecutionSummary = {
+  id: number;
+  session_id: string;
+  correlation_id: string;
+  intent: string | null;
+  status: string;
+  created_at: string | null;
+  completed_at: string | null;
+  total_latency_ms: number | null;
+  tool_calls_count: number;
+};
+
+type TraceToolCall = {
+  id: number;
+  tool_name: string;
+  input_data: any;
+  output_data: any;
+  status: string;
+  latency_ms: number;
+  policy_result: string | null;
+  created_at: string | null;
+};
+
+type ExecutionTrace = {
+  execution_id: number;
+  merchant_id: number;
+  session_id: string;
+  correlation_id: string;
+  intent: string | null;
+  status: string;
+  created_at: string | null;
+  completed_at: string | null;
+  total_latency_ms: number | null;
+  tool_calls_count: number;
+  tool_calls: TraceToolCall[];
+};
+
 const API = "http://127.0.0.1:8000";
 const ACCESS_TOKEN_KEY = "razorgrow_access_token";
 
@@ -79,6 +116,17 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+
+  // Agent Observability & Trace states
+  const [executions, setExecutions] = useState<ExecutionSummary[]>([]);
+  const [executionsLoading, setExecutionsLoading] = useState(false);
+  const [selectedTrace, setSelectedTrace] = useState<ExecutionTrace | null>(null);
+  const [traceLoading, setTraceLoading] = useState(false);
+
+  // AI Agent live chat simulation
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatReply, setChatReply] = useState<any | null>(null);
 
   // IMPORTANT:
   // Keep the actual token in React state instead of repeatedly
@@ -225,6 +273,7 @@ export default function Home() {
           setProducts(productData);
           setDashboard(dashboardData);
           setApprovals(approvalData);
+          loadExecutions(token);
         },
       )
       .catch((err) => {
@@ -250,6 +299,75 @@ export default function Home() {
         setApprovalsLoading(false);
       });
   }, [authChecked, accessToken, loggedIn]);
+
+  const loadExecutions = async (tokenToUse?: string) => {
+    const token = tokenToUse || accessToken;
+    if (!token) return;
+    setExecutionsLoading(true);
+    try {
+      const response = await fetch(`${API}/agent/executions?limit=15`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setExecutions(data);
+      }
+    } catch (err) {
+      console.error("Failed to load executions:", err);
+    } finally {
+      setExecutionsLoading(false);
+    }
+  };
+
+  const viewTrace = async (id: number) => {
+    if (!accessToken) return;
+    setTraceLoading(true);
+    try {
+      const response = await fetch(`${API}/agent/executions/${id}/trace`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (response.ok) {
+        const trace = await response.json();
+        setSelectedTrace(trace);
+      }
+    } catch (err) {
+      console.error("Failed to fetch execution trace:", err);
+    } finally {
+      setTraceLoading(false);
+    }
+  };
+
+  const sendAgentChat = async (promptText?: string) => {
+    const prompt = promptText || chatMessage;
+    if (!prompt.trim() || !accessToken) return;
+    setChatLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API}/agent/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ message: prompt }),
+      });
+      if (!response.ok) {
+        throw new Error(`Agent chat failed: ${response.status}`);
+      }
+      const data = await response.json();
+      setChatReply(data);
+      setChatMessage("");
+      loadExecutions();
+      if (data.execution_id) {
+        viewTrace(data.execution_id);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Agent interaction failed.");
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const filteredProducts = products.filter(
     (product) => {
@@ -804,6 +922,357 @@ export default function Home() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Agent Observability & Trace Reconstructor */}
+      <section style={styles.catalog}>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h2 style={styles.title}>Agent Observability & Live Traces</h2>
+              <p style={styles.muted}>
+                Interact with the AI Revenue Agent, inspect tool call pipelines, and verify explainable execution traces.
+              </p>
+            </div>
+            <button
+              type="button"
+              style={{ ...styles.button, background: "#f3f4f6", marginTop: 0 }}
+              onClick={() => loadExecutions()}
+            >
+              Refresh Traces
+            </button>
+          </div>
+        </div>
+
+        {/* Live Conversation Tester */}
+        <div style={styles.activityCard}>
+          <div style={styles.activityHeader}>
+            <div>
+              <h3 style={styles.cardTitle}>Live AI Revenue Agent Tester</h3>
+              <p style={styles.muted}>
+                Test shopping intent, grounded recommendations, and upsell generation in real-time.
+              </p>
+            </div>
+            <span style={styles.liveBadge}>INTERACTIVE</span>
+          </div>
+
+          <div style={{ padding: 20 }}>
+            {/* Sample Prompts */}
+            <div style={{ marginBottom: 14, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Try scenario:</span>
+              {[
+                "I need a laptop for programming under ₹70,000",
+                "Suggest a keyboard under ₹5,000",
+                "I want a wireless mouse under ₹2,000",
+              ].map((sample) => (
+                <button
+                  key={sample}
+                  type="button"
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    fontSize: 12,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    setChatMessage(sample);
+                    sendAgentChat(sample);
+                  }}
+                >
+                  "{sample}"
+                </button>
+              ))}
+            </div>
+
+            {/* Input bar */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <input
+                type="text"
+                placeholder="Ask the revenue agent (e.g. 'Laptop for coding under ₹70,000')..."
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    sendAgentChat();
+                  }
+                }}
+                style={{ ...styles.search, margin: 0, flex: 1 }}
+              />
+              <button
+                type="button"
+                disabled={chatLoading}
+                onClick={() => sendAgentChat()}
+                style={{
+                  ...styles.button,
+                  background: "#0f172a",
+                  color: "#fff",
+                  padding: "0 24px",
+                  marginTop: 0,
+                }}
+              >
+                {chatLoading ? "Thinking..." : "Send to Agent"}
+              </button>
+            </div>
+
+            {/* Agent Reply Box */}
+            {chatReply && (
+              <div
+                style={{
+                  marginTop: 18,
+                  padding: 16,
+                  borderRadius: 10,
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontWeight: 700, color: "#1e293b", fontSize: 14 }}>
+                    Agent Response
+                  </span>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>
+                    Latency: {chatReply.total_latency_ms.toFixed(1)} ms | Execution #{chatReply.execution_id}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: "#334155" }}>
+                  {chatReply.reply}
+                </p>
+
+                {chatReply.recommended_product && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      display: "flex",
+                      gap: 16,
+                      background: "#fff",
+                      padding: 12,
+                      borderRadius: 8,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: 11, textTransform: "uppercase", color: "#64748b", fontWeight: 700 }}>
+                        Grounded Recommendation
+                      </span>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
+                        {chatReply.recommended_product.name}
+                      </div>
+                      <div style={{ color: "#059669", fontWeight: 800 }}>
+                        {money(chatReply.recommended_product.price)}
+                      </div>
+                    </div>
+
+                    {chatReply.upsell_product && (
+                      <div style={{ borderLeft: "1px solid #e2e8f0", paddingLeft: 16 }}>
+                        <span style={{ fontSize: 11, textTransform: "uppercase", color: "#2563eb", fontWeight: 700 }}>
+                          Compatible Upsell
+                        </span>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
+                          {chatReply.upsell_product.name}
+                        </div>
+                        <div style={{ color: "#2563eb", fontWeight: 800 }}>
+                          +{money(chatReply.upsell_product.price)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Selected Trace Details (Trace Reconstructor) */}
+        {selectedTrace && (
+          <div style={{ ...styles.activityCard, borderColor: "#3b82f6", boxShadow: "0 4px 12px rgba(59,130,246,0.1)" }}>
+            <div style={{ ...styles.activityHeader, background: "#eff6ff" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <h3 style={{ ...styles.cardTitle, color: "#1e40af" }}>
+                    Execution Trace #{selectedTrace.execution_id}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "3px 8px",
+                      borderRadius: 999,
+                      background: selectedTrace.status === "completed" ? "#dcfce7" : "#fee2e2",
+                      color: selectedTrace.status === "completed" ? "#166534" : "#991b1b",
+                    }}
+                  >
+                    {selectedTrace.status.toUpperCase()}
+                  </span>
+                </div>
+                <p style={{ ...styles.muted, color: "#3b82f6" }}>
+                  Correlation ID: {selectedTrace.correlation_id} | Total Latency: {selectedTrace.total_latency_ms?.toFixed(1) || 0} ms | Tool Calls: {selectedTrace.tool_calls_count}
+                </p>
+              </div>
+              <button
+                type="button"
+                style={{ ...styles.button, marginTop: 0 }}
+                onClick={() => setSelectedTrace(null)}
+              >
+                Close Trace
+              </button>
+            </div>
+
+            <div style={{ padding: 20 }}>
+              <div style={{ marginBottom: 16 }}>
+                <strong>User Intent:</strong>{" "}
+                <span style={{ color: "#334155" }}>"{selectedTrace.intent || "N/A"}"</span>
+              </div>
+
+              <h4 style={{ margin: "0 0 12px", fontSize: 14, color: "#475569", textTransform: "uppercase" }}>
+                Reconstructed Tool Call Pipeline:
+              </h4>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {selectedTrace.tool_calls.map((call, idx) => (
+                  <div
+                    key={call.id}
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 8,
+                      padding: 14,
+                      background: "#fafafa",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span
+                          style={{
+                            background: "#0f172a",
+                            color: "#fff",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            borderRadius: 4,
+                            padding: "2px 6px",
+                          }}
+                        >
+                          Step {idx + 1}
+                        </span>
+                        <strong style={{ fontSize: 15 }}>{call.tool_name}</strong>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+                        <span style={{ color: "#64748b" }}>{call.latency_ms.toFixed(1)} ms</span>
+                        <span
+                          style={{
+                            color: call.status === "success" ? "#059669" : "#dc2626",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {call.status.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 4 }}>
+                          SANITIZED INPUT:
+                        </div>
+                        <pre
+                          style={{
+                            margin: 0,
+                            padding: 8,
+                            borderRadius: 6,
+                            background: "#f1f5f9",
+                            fontSize: 12,
+                            maxHeight: 120,
+                            overflowY: "auto",
+                          }}
+                        >
+                          {JSON.stringify(call.input_data, null, 2)}
+                        </pre>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 4 }}>
+                          OUTPUT / RESULT:
+                        </div>
+                        <pre
+                          style={{
+                            margin: 0,
+                            padding: 8,
+                            borderRadius: 6,
+                            background: "#f1f5f9",
+                            fontSize: 12,
+                            maxHeight: 120,
+                            overflowY: "auto",
+                          }}
+                        >
+                          {JSON.stringify(call.output_data, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recent Executions Table */}
+        <div style={styles.activityCard}>
+          <div style={styles.activityHeader}>
+            <div>
+              <h3 style={styles.cardTitle}>Recent Agent Executions</h3>
+              <p style={styles.muted}>
+                Historical trace records for audit and compliance inspection.
+              </p>
+            </div>
+            {executionsLoading && <span style={styles.muted}>Loading...</span>}
+          </div>
+
+          {executions.length === 0 ? (
+            <div style={styles.activityRow}>
+              <span>No agent executions recorded yet. Try a scenario above!</span>
+            </div>
+          ) : (
+            executions.map((exec) => (
+              <div key={exec.id} style={styles.activityRow}>
+                <div style={styles.activityMain}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <strong>Execution #{exec.id}</strong>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        borderRadius: 999,
+                        background: exec.status === "completed" ? "#ecfdf5" : "#fef2f2",
+                        color: exec.status === "completed" ? "#047857" : "#b91c1c",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {exec.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <span style={styles.entity}>
+                    "{exec.intent ? (exec.intent.length > 50 ? exec.intent.slice(0, 50) + "..." : exec.intent) : "N/A"}"
+                  </span>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>
+                    Correlation: {exec.correlation_id}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ fontSize: 13, color: "#64748b" }}>
+                    {exec.tool_calls_count} tools • {exec.total_latency_ms?.toFixed(1) || 0} ms
+                  </span>
+                  <button
+                    type="button"
+                    style={{ ...styles.button, marginTop: 0, padding: "6px 12px", fontSize: 13 }}
+                    onClick={() => viewTrace(exec.id)}
+                  >
+                    Inspect Trace
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </section>
 
       {/* Product Catalog */}
