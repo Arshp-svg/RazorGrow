@@ -20,11 +20,56 @@ type Metrics = {
   successful_payments: number;
   failed_payments: number;
   recovered_payments: number;
-  revenue: number;
+  revenue?: number;
+  total_revenue?: number;
   recovered_revenue: number;
+  upsell_revenue?: number;
+  ai_influenced_revenue?: number;
   average_order_value: number;
   payment_conversion_rate: number;
+  payment_recovery_rate?: number;
   policy_blocks: number;
+};
+
+type Campaign = {
+  id: number;
+  title: string;
+  description: string;
+  bundle_config: {
+    base_product_id: number;
+    base_product_name: string;
+    addon_product_id: number;
+    addon_product_name: string;
+    original_total: number;
+    discounted_total: number;
+    discount_percent: number;
+  } | null;
+  discount_percent: number;
+  status: string;
+  projected_impact: string;
+  created_at: string | null;
+  decided_at: string | null;
+  decided_by_user_id: number | null;
+};
+
+type InsightsResponse = {
+  insights: string[];
+  recommendations: Array<{
+    type: string;
+    base_product: string;
+    addon_product: string;
+    regular_price: number;
+    bundle_price: number;
+    discount_percent: number;
+  }>;
+  campaign_proposal: {
+    id: number;
+    title: string;
+    description: string;
+    status: string;
+    projected_impact: string;
+    discount_percent: number;
+  } | null;
 };
 
 type Activity = {
@@ -128,6 +173,13 @@ export default function Home() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatReply, setChatReply] = useState<any | null>(null);
 
+  // Day 11: Revenue Analytics & AI Campaign states
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [insights, setInsights] = useState<InsightsResponse | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [campaignDecisionLoading, setCampaignDecisionLoading] = useState<number | null>(null);
+
   // IMPORTANT:
   // Keep the actual token in React state instead of repeatedly
   // reading localStorage inside different effects.
@@ -202,14 +254,14 @@ export default function Home() {
         return response.json();
       }),
 
-      fetch(`${API}/dashboard/overview?limit=10`, {
+      fetch(`${API}/analytics/overview?limit=10`, {
         headers: authHeaders,
       }).then(async (response) => {
         if (!response.ok) {
           const body = await response.text();
 
           console.error(
-            "Dashboard API failed:",
+            "Analytics overview API failed:",
             response.status,
             body,
           );
@@ -228,7 +280,7 @@ export default function Home() {
           }
 
           throw new Error(
-            `Dashboard API failed: ${response.status}`,
+            `Analytics overview API failed: ${response.status}`,
           );
         }
 
@@ -274,6 +326,7 @@ export default function Home() {
           setDashboard(dashboardData);
           setApprovals(approvalData);
           loadExecutions(token);
+          loadCampaigns(token);
         },
       )
       .catch((err) => {
@@ -316,6 +369,90 @@ export default function Home() {
       console.error("Failed to load executions:", err);
     } finally {
       setExecutionsLoading(false);
+    }
+  };
+
+  const loadCampaigns = async (tokenToUse?: string) => {
+    const token = tokenToUse || accessToken;
+    if (!token) return;
+    setCampaignsLoading(true);
+    try {
+      const response = await fetch(`${API}/analytics/campaigns`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCampaigns(data);
+      }
+    } catch (err) {
+      console.error("Failed to load campaigns:", err);
+    } finally {
+      setCampaignsLoading(false);
+    }
+  };
+
+  const askAIInsights = async () => {
+    if (!accessToken) return;
+    setInsightsLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API}/analytics/insights`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`AI Insights failed: ${response.status}`);
+      }
+      const data = await response.json();
+      setInsights(data);
+      await loadCampaigns();
+    } catch (err) {
+      console.error("AI Insights error:", err);
+      setError("Failed to generate AI revenue insights.");
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
+
+  const handleCampaignDecision = async (campaignId: number, approve: boolean) => {
+    if (!accessToken) return;
+    setCampaignDecisionLoading(campaignId);
+    setError("");
+    try {
+      const action = approve ? "approve" : "reject";
+      const response = await fetch(`${API}/analytics/campaigns/${campaignId}/${action}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Action failed: ${response.status}`);
+      }
+      await loadCampaigns();
+      if (insights?.campaign_proposal?.id === campaignId) {
+        setInsights((prev) =>
+          prev
+            ? {
+                ...prev,
+                campaign_proposal: {
+                  ...prev.campaign_proposal!,
+                  status: approve ? "APPROVED" : "REJECTED",
+                },
+              }
+            : null
+        );
+      }
+    } catch (err: any) {
+      console.error("Campaign decision error:", err);
+      setError(err.message || "Failed to process campaign decision.");
+    } finally {
+      setCampaignDecisionLoading(null);
     }
   };
 
@@ -587,25 +724,41 @@ export default function Home() {
           <>
             <div style={styles.metricsGrid}>
               <MetricCard
-                label="Revenue"
+                label="Total Revenue"
                 value={money(
-                  dashboard.metrics.revenue,
+                  dashboard.metrics.total_revenue ??
+                    dashboard.metrics.revenue ??
+                    0,
+                )}
+              />
+
+              <MetricCard
+                label="AI-Influenced Revenue"
+                value={money(
+                  dashboard.metrics.ai_influenced_revenue ?? 0,
+                )}
+              />
+
+              <MetricCard
+                label="Upsell Revenue"
+                value={money(
+                  dashboard.metrics.upsell_revenue ?? 0,
                 )}
               />
 
               <MetricCard
                 label="Recovered Revenue"
                 value={money(
-                  dashboard.metrics
-                    .recovered_revenue,
+                  dashboard.metrics.recovered_revenue,
                 )}
               />
+            </div>
 
+            <div style={styles.secondaryGrid}>
               <MetricCard
                 label="Average Order"
                 value={money(
-                  dashboard.metrics
-                    .average_order_value,
+                  dashboard.metrics.average_order_value,
                 )}
               />
 
@@ -613,22 +766,15 @@ export default function Home() {
                 label="Payment Conversion"
                 value={`${dashboard.metrics.payment_conversion_rate}%`}
               />
-            </div>
 
-            <div style={styles.secondaryGrid}>
+              <MetricCard
+                label="Recovery Rate"
+                value={`${dashboard.metrics.payment_recovery_rate ?? 0}%`}
+              />
+
               <MetricCard
                 label="Total Orders"
                 value={dashboard.metrics.total_orders.toString()}
-              />
-
-              <MetricCard
-                label="Successful Payments"
-                value={dashboard.metrics.successful_payments.toString()}
-              />
-
-              <MetricCard
-                label="Recovered Payments"
-                value={dashboard.metrics.recovered_payments.toString()}
               />
 
               <MetricCard
@@ -732,6 +878,270 @@ export default function Home() {
             </div>
           </>
         ) : null}
+      </section>
+
+      {/* Autonomous Revenue Intelligence & Campaign Studio (Day 11) */}
+      <section style={styles.catalog}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={styles.title}>Autonomous Revenue Intelligence & Campaign Studio</h2>
+            <p style={styles.muted}>
+              Generate grounded catalog bundle promotions, forecast revenue uplift, and enforce human-in-the-loop campaign activation.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={insightsLoading}
+            onClick={() => askAIInsights()}
+            style={{
+              ...styles.button,
+              background: "#1e1b4b",
+              color: "#e0e7ff",
+              border: "1px solid #4338ca",
+              padding: "10px 20px",
+              marginTop: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: "0 2px 8px rgba(67, 56, 202, 0.2)",
+            }}
+          >
+            <span>⚡</span>
+            <span>{insightsLoading ? "Analyzing Catalog & Affinity..." : "Ask AI: How can I increase revenue?"}</span>
+          </button>
+        </div>
+
+        {/* AI Grounded Insights Banner if available */}
+        {insights && (
+          <div style={{ marginTop: 20, background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 14, padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 18 }}>💡</span>
+              <strong style={{ color: "#4c1d95", fontSize: 16 }}>AI Grounded Analysis & Inventory Audit</strong>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 20, color: "#5b21b6", fontSize: 14, lineHeight: 1.7 }}>
+              {insights.insights.map((item, idx) => (
+                <li key={idx}>{item}</li>
+              ))}
+            </ul>
+
+            {insights.campaign_proposal && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 18,
+                  borderRadius: 12,
+                  background: "#fff",
+                  border: "1px solid #c4b5fd",
+                  boxShadow: "0 2px 6px rgba(124, 58, 237, 0.08)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#6d28d9", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      Recommended Promotion Proposal #{insights.campaign_proposal.id}
+                    </span>
+                    <h3 style={{ margin: "4px 0 8px", fontSize: 18, color: "#1e1b4b" }}>
+                      {insights.campaign_proposal.title}
+                    </h3>
+                  </div>
+                  <span
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      background:
+                        insights.campaign_proposal.status === "APPROVED"
+                          ? "#dcfce7"
+                          : insights.campaign_proposal.status === "REJECTED"
+                          ? "#fee2e2"
+                          : "#fef3c7",
+                      color:
+                        insights.campaign_proposal.status === "APPROVED"
+                          ? "#15803d"
+                          : insights.campaign_proposal.status === "REJECTED"
+                          ? "#b91c1c"
+                          : "#b45309",
+                    }}
+                  >
+                    {insights.campaign_proposal.status}
+                  </span>
+                </div>
+
+                <p style={{ margin: "6px 0 12px", fontSize: 14, color: "#374151", lineHeight: 1.5 }}>
+                  {insights.campaign_proposal.description}
+                </p>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, color: "#334155" }}>
+                  <span>📈</span>
+                  <strong>Forecast:</strong>
+                  <span>{insights.campaign_proposal.projected_impact}</span>
+                </div>
+
+                {insights.campaign_proposal.status === "PENDING_APPROVAL" && (
+                  <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+                    <button
+                      type="button"
+                      disabled={campaignDecisionLoading === insights.campaign_proposal.id}
+                      onClick={() => handleCampaignDecision(insights.campaign_proposal!.id, true)}
+                      style={{
+                        ...styles.button,
+                        background: "#047857",
+                        color: "#fff",
+                        border: "none",
+                        padding: "8px 18px",
+                        marginTop: 0,
+                      }}
+                    >
+                      {campaignDecisionLoading === insights.campaign_proposal.id ? "Processing..." : "Approve & Activate Campaign"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={campaignDecisionLoading === insights.campaign_proposal.id}
+                      onClick={() => handleCampaignDecision(insights.campaign_proposal!.id, false)}
+                      style={{
+                        ...styles.button,
+                        background: "#fef2f2",
+                        color: "#b91c1c",
+                        border: "1px solid #fecaca",
+                        padding: "8px 18px",
+                        marginTop: 0,
+                      }}
+                    >
+                      Reject Proposal
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Existing & Approved Campaigns Table */}
+        <div style={{ ...styles.activityCard, marginTop: 20 }}>
+          <div style={styles.activityHeader}>
+            <div>
+              <h3 style={styles.cardTitle}>Merchant Bundle Campaigns</h3>
+              <p style={styles.muted}>
+                Active and historical AI-generated bundle promotions and their governance state.
+              </p>
+            </div>
+            <button
+              type="button"
+              style={{ ...styles.button, background: "#f3f4f6", marginTop: 0 }}
+              onClick={() => loadCampaigns()}
+            >
+              Refresh Campaigns
+            </button>
+          </div>
+
+          {campaignsLoading ? (
+            <div style={{ padding: 20, color: "#6b7280" }}>Loading campaigns...</div>
+          ) : campaigns.length === 0 ? (
+            <div style={{ padding: 24, textAlign: "center", color: "#6b7280", fontSize: 14 }}>
+              No bundle campaigns yet. Click <strong>"Ask AI: How can I increase revenue?"</strong> above to generate your first promotion proposal.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              {campaigns.map((camp) => (
+                <div
+                  key={camp.id}
+                  style={{
+                    ...styles.activityRow,
+                    flexWrap: "wrap",
+                    gap: 16,
+                    padding: 16,
+                    borderBottom: "1px solid #f1f5f9",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 280 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <strong style={{ fontSize: 15, color: "#111827" }}>{camp.title}</strong>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background:
+                            camp.status === "APPROVED"
+                              ? "#dcfce7"
+                              : camp.status === "REJECTED"
+                              ? "#fee2e2"
+                              : "#fef3c7",
+                          color:
+                            camp.status === "APPROVED"
+                              ? "#15803d"
+                              : camp.status === "REJECTED"
+                              ? "#b91c1c"
+                              : "#b45309",
+                        }}
+                      >
+                        {camp.status}
+                      </span>
+                    </div>
+                    <p style={{ margin: "4px 0 6px", fontSize: 13, color: "#4b5563" }}>
+                      {camp.description}
+                    </p>
+                    <div style={{ fontSize: 12, color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" }}>
+                      <span>Discount: <strong>{camp.discount_percent}%</strong></span>
+                      {camp.bundle_config && (
+                        <span>
+                          Bundle Price: <strong>₹{camp.bundle_config.discounted_total.toLocaleString("en-IN")}</strong> (Regular: ₹{camp.bundle_config.original_total.toLocaleString("en-IN")})
+                        </span>
+                      )}
+                      {camp.created_at && (
+                        <span>Created: {new Date(camp.created_at).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {camp.status === "PENDING_APPROVAL" ? (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <button
+                        type="button"
+                        disabled={campaignDecisionLoading === camp.id}
+                        onClick={() => handleCampaignDecision(camp.id, true)}
+                        style={{
+                          ...styles.button,
+                          background: "#047857",
+                          color: "#fff",
+                          border: "none",
+                          padding: "6px 14px",
+                          fontSize: 13,
+                          marginTop: 0,
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        disabled={campaignDecisionLoading === camp.id}
+                        onClick={() => handleCampaignDecision(camp.id, false)}
+                        style={{
+                          ...styles.button,
+                          background: "#fef2f2",
+                          color: "#b91c1c",
+                          border: "1px solid #fecaca",
+                          padding: "6px 14px",
+                          fontSize: 13,
+                          marginTop: 0,
+                        }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#6b7280", textAlign: "right" }}>
+                      <div>Decided by User #{camp.decided_by_user_id ?? "N/A"}</div>
+                      {camp.decided_at && <div>{new Date(camp.decided_at).toLocaleString()}</div>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Approval Center */}
