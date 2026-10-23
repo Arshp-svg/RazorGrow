@@ -17,18 +17,26 @@ from app.api.auth import router as auth_router
 from app.api.approvals import router as approvals_router
 from app.api.webhooks import router as webhooks_router
 from app.api.agent import router as agent_router
+import os
 from app.api.analytics import router as analytics_router
 from app.api.ai_catalog import router as ai_catalog_router
+from app.security.middleware import register_security_and_error_handlers
 
 app = FastAPI(title="RazorGrow API")
 
+cors_origins_env = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register security headers (nosniff, DENY, etc.) and global error handlers
+register_security_and_error_handlers(app)
 
 app.include_router(auth_router)
 app.include_router(products_router)

@@ -13,6 +13,7 @@ from app.services.ai_catalog_service import (
     get_ai_buyer_scenarios,
     get_ai_catalog,
 )
+from app.security.rate_limiter import rate_limit_agent
 
 router = APIRouter(
     prefix="/ai",
@@ -44,7 +45,11 @@ def get_buyer_demonstration_scenarios():
     return get_ai_buyer_scenarios()
 
 
-@router.post("/buyer/procure", response_model=AIBuyerProcureResponse)
+@router.post(
+    "/buyer/procure",
+    response_model=AIBuyerProcureResponse,
+    dependencies=[Depends(rate_limit_agent)],
+)
 def run_ai_buyer_procurement(
     request: AIBuyerProcureRequest,
     db: Session = Depends(get_db),

@@ -21,6 +21,7 @@ from app.services.trace_service import (
     start_execution,
 )
 from app.services.upsell_service import recommend_upsell
+from app.security.rate_limiter import rate_limit_agent
 
 router = APIRouter(
     prefix="/agent",
@@ -38,7 +39,11 @@ def get_db():
         db.close()
 
 
-@router.post("/chat", response_model=AgentChatResponse)
+@router.post(
+    "/chat",
+    response_model=AgentChatResponse,
+    dependencies=[Depends(rate_limit_agent)],
+)
 def agent_chat(
     request: AgentChatRequest,
     db: Session = Depends(get_db),

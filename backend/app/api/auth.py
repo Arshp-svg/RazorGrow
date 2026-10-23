@@ -26,6 +26,9 @@ from app.services.auth_service import (
 )
 
 
+from app.security.rate_limiter import rate_limit_auth
+
+
 router = APIRouter(
     prefix="/auth",
     tags=["auth"],
@@ -44,6 +47,7 @@ def get_db():
 @router.post(
     "/register",
     response_model=UserResponse,
+    dependencies=[Depends(rate_limit_auth)],
 )
 def register(
     request: RegisterRequest,
@@ -70,6 +74,7 @@ def register(
 @router.post(
     "/login",
     response_model=LoginResponse,
+    dependencies=[Depends(rate_limit_auth)],
 )
 def login(
     request: LoginRequest,

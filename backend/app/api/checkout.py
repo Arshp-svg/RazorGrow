@@ -13,6 +13,7 @@ from app.api.auth_dependencies import (
     require_merchant_roles,
 )
 from app.auth.roles import MerchantRole
+from app.security.rate_limiter import rate_limit_checkout
 
 router = APIRouter(
     prefix="/checkout",
@@ -70,6 +71,7 @@ def confirm_checkout(
     
 @router.post(
     "/{cart_id}/create-order",
+    dependencies=[Depends(rate_limit_checkout)],
 )
 def create_checkout_payment_order(
     cart_id: int,
