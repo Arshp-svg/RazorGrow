@@ -55,7 +55,40 @@ app.include_router(ai_catalog_router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    db = SessionLocal()
+    try:
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as exc:
+        db_status = f"unhealthy: {exc}"
+    finally:
+        db.close()
+
+    return {
+        "status": "ok" if db_status == "connected" else "degraded",
+        "service": "razorgrow-backend",
+        "version": "1.0.0",
+        "database": db_status,
+    }
+
+
+@app.get("/health/ready")
+def readiness():
+    db = SessionLocal()
+    try:
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
+        return {"status": "ready"}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Database not ready: {exc}")
+    finally:
+        db.close()
+
+
+@app.get("/health/live")
+def liveness():
+    return {"status": "alive"}
 
 
 @app.post("/orders/test")
