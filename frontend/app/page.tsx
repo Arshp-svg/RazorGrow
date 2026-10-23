@@ -72,6 +72,90 @@ type InsightsResponse = {
   } | null;
 };
 
+type AICatalogPolicy = {
+  currency: string;
+  max_transaction_amount: number;
+  max_discount_percent: number;
+  merchant_approval_threshold: number | null;
+  customer_confirmation_required: boolean;
+  policy_version: number;
+};
+
+type AICatalogSummary = {
+  total_items: number;
+  categories: string[];
+  in_stock_items: number;
+};
+
+type AICatalogItem = {
+  id: number;
+  name: string;
+  price: number;
+  currency: string;
+  category: string;
+  tags: string[];
+  use_cases: string[];
+  availability: string;
+  inventory: number;
+  compatibility: Array<{
+    product_id: number;
+    name: string;
+    price: number;
+    category: string;
+    in_stock: boolean;
+  }>;
+  upsell_suggestions: Array<{
+    product_id: number;
+    name: string;
+    price: number;
+    category: string;
+    in_stock: boolean;
+  }>;
+  purchase_limits: {
+    min_quantity?: number;
+    max_quantity?: number;
+  };
+};
+
+type AICatalogResponse = {
+  protocol: string;
+  merchant: {
+    id: number;
+    name: string;
+    status: string;
+    currency: string;
+  };
+  commerce_policies: AICatalogPolicy;
+  catalog_summary: AICatalogSummary;
+  items: AICatalogItem[];
+};
+
+type AIBuyerScenario = {
+  id: string;
+  title: string;
+  description: string;
+  query: string;
+  budget_limit: number;
+  product_id?: number | null;
+  include_compatible_addon: boolean;
+  expected_outcome: string;
+};
+
+type AIBuyerProcureResult = {
+  status: string;
+  message: string;
+  execution_id: number | null;
+  session_id: string;
+  procurement_plan: any;
+  cart_id: number | null;
+  order: any | null;
+  approval_id: number | null;
+  policy_decision: {
+    decision: string;
+    reason: string;
+  };
+};
+
 type Activity = {
   id: number;
   action: string;
@@ -179,6 +263,18 @@ export default function Home() {
   const [insights, setInsights] = useState<InsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [campaignDecisionLoading, setCampaignDecisionLoading] = useState<number | null>(null);
+
+  // Day 12: AI-Readable Catalog & AI Buyer Interface states
+  const [aiCatalog, setAiCatalog] = useState<AICatalogResponse | null>(null);
+  const [aiCatalogLoading, setAiCatalogLoading] = useState(false);
+  const [showRawCatalogJson, setShowRawCatalogJson] = useState(false);
+  const [buyerScenarios, setBuyerScenarios] = useState<AIBuyerScenario[]>([]);
+  const [buyerQuery, setBuyerQuery] = useState("Procure a developer laptop under ₹70,000 paired with a compatible wireless mouse");
+  const [buyerBudget, setBuyerBudget] = useState<number>(70000);
+  const [buyerAutoConfirm, setBuyerAutoConfirm] = useState(true);
+  const [buyerProductId, setBuyerProductId] = useState<number | null>(1);
+  const [buyerProcureLoading, setBuyerProcureLoading] = useState(false);
+  const [buyerProcureResult, setBuyerProcureResult] = useState<AIBuyerProcureResult | null>(null);
 
   // IMPORTANT:
   // Keep the actual token in React state instead of repeatedly
@@ -327,6 +423,8 @@ export default function Home() {
           setApprovals(approvalData);
           loadExecutions(token);
           loadCampaigns(token);
+          loadAICatalog();
+          loadBuyerScenarios();
         },
       )
       .catch((err) => {
@@ -453,6 +551,83 @@ export default function Home() {
       setError(err.message || "Failed to process campaign decision.");
     } finally {
       setCampaignDecisionLoading(null);
+    }
+  };
+
+  const loadAICatalog = async () => {
+    setAiCatalogLoading(true);
+    try {
+      const response = await fetch(`${API}/ai/catalog?merchant_id=1`);
+      if (response.ok) {
+        const data = await response.json();
+        setAiCatalog(data);
+      }
+    } catch (err) {
+      console.error("Failed to load AI catalog:", err);
+    } finally {
+      setAiCatalogLoading(false);
+    }
+  };
+
+  const loadBuyerScenarios = async () => {
+    try {
+      const response = await fetch(`${API}/ai/buyer/scenarios`);
+      if (response.ok) {
+        const data = await response.json();
+        setBuyerScenarios(data);
+      }
+    } catch (err) {
+      console.error("Failed to load buyer scenarios:", err);
+    }
+  };
+
+  const executeBuyerProcure = async (scenario?: AIBuyerScenario) => {
+    const query = scenario ? scenario.query : buyerQuery;
+    const budget = scenario ? scenario.budget_limit : buyerBudget;
+    const prodId = scenario ? scenario.product_id : buyerProductId;
+    const addon = scenario ? scenario.include_compatible_addon : true;
+
+    setBuyerProcureLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API}/ai/buyer/procure`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          merchant_id: 1,
+          query: query,
+          budget_limit: budget,
+          product_id: prodId,
+          include_compatible_addon: addon,
+          auto_confirm: buyerAutoConfirm,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Procurement failed: ${response.status}`);
+      }
+
+      const result: AIBuyerProcureResult = await response.json();
+      setBuyerProcureResult(result);
+
+      // Refresh executions and approvals
+      loadExecutions();
+      if (accessToken) {
+        fetch(`${API}/approvals`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+          .then((r) => r.ok && r.json())
+          .then((d) => d && setApprovals(d))
+          .catch(() => {});
+      }
+    } catch (err: any) {
+      console.error("Autonomous procurement error:", err);
+      setError(err.message || "Failed to execute autonomous buyer procurement.");
+    } finally {
+      setBuyerProcureLoading(false);
     }
   };
 
@@ -1682,6 +1857,346 @@ export default function Home() {
               </div>
             ))
           )}
+        </div>
+      </section>
+
+      {/* AI-Readable Catalog & Autonomous AI Buyer Simulator (Day 12) */}
+      <section style={styles.catalog}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 20 }}>🤖</span>
+              <h2 style={styles.title}>AI-Readable Catalog & Autonomous AI Buyer Interface</h2>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", background: "#e0e7ff", color: "#3730a3", borderRadius: 999 }}>
+                DAY 12
+              </span>
+            </div>
+            <p style={styles.muted}>
+              Structured machine-readable commerce protocol (<code>/ai/catalog</code>) with availability &amp; policy manifests, alongside a controlled autonomous buyer client executing policy-governed procurement.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              style={{ ...styles.button, background: "#f8fafc", marginTop: 0 }}
+              onClick={() => loadAICatalog()}
+            >
+              Refresh AI Catalog
+            </button>
+            <button
+              type="button"
+              style={{
+                ...styles.button,
+                background: showRawCatalogJson ? "#4338ca" : "#f1f5f9",
+                color: showRawCatalogJson ? "#fff" : "#1e293b",
+                marginTop: 0,
+              }}
+              onClick={() => setShowRawCatalogJson(!showRawCatalogJson)}
+            >
+              {showRawCatalogJson ? "View Clean Summary" : "Inspect Raw JSON Schema"}
+            </button>
+          </div>
+        </div>
+
+        {/* Machine-Readable Protocol Manifest Header Card */}
+        {aiCatalog && (
+          <div style={{ marginTop: 20, background: "#0f172a", color: "#f8fafc", borderRadius: 14, padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, borderBottom: "1px solid #334155", paddingBottom: 14 }}>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#38bdf8", textTransform: "uppercase" }}>
+                  Active Agent Protocol
+                </span>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginTop: 2 }}>
+                  {aiCatalog.protocol}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 16, fontSize: 13, flexWrap: "wrap" }}>
+                <div>
+                  <span style={{ color: "#94a3b8" }}>Endpoint: </span>
+                  <code style={{ background: "#1e293b", padding: "2px 6px", borderRadius: 4, color: "#38bdf8" }}>GET /ai/catalog?merchant_id={aiCatalog.merchant.id}</code>
+                </div>
+                <div>
+                  <span style={{ color: "#94a3b8" }}>Discovered Items: </span>
+                  <strong style={{ color: "#fff" }}>{aiCatalog.catalog_summary.total_items}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#94a3b8" }}>In Stock: </span>
+                  <strong style={{ color: "#4ade80" }}>{aiCatalog.catalog_summary.in_stock_items}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Commerce Policies Manifest */}
+            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, fontSize: 12 }}>
+              <div style={{ background: "#1e293b", padding: "10px 14px", borderRadius: 8, border: "1px solid #334155" }}>
+                <span style={{ color: "#94a3b8" }}>MAX TRANSACTION LIMIT</span>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginTop: 2 }}>
+                  ₹{aiCatalog.commerce_policies.max_transaction_amount.toLocaleString("en-IN")}
+                </div>
+              </div>
+              <div style={{ background: "#1e293b", padding: "10px 14px", borderRadius: 8, border: "1px solid #334155" }}>
+                <span style={{ color: "#94a3b8" }}>MAX ALLOWED DISCOUNT</span>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginTop: 2 }}>
+                  {aiCatalog.commerce_policies.max_discount_percent}%
+                </div>
+              </div>
+              <div style={{ background: "#1e293b", padding: "10px 14px", borderRadius: 8, border: "1px solid #334155" }}>
+                <span style={{ color: "#94a3b8" }}>APPROVAL THRESHOLD</span>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#facc15", marginTop: 2 }}>
+                  {aiCatalog.commerce_policies.merchant_approval_threshold ? `₹${aiCatalog.commerce_policies.merchant_approval_threshold.toLocaleString("en-IN")}` : "None"}
+                </div>
+              </div>
+              <div style={{ background: "#1e293b", padding: "10px 14px", borderRadius: 8, border: "1px solid #334155" }}>
+                <span style={{ color: "#94a3b8" }}>CONFIRMATION GATE</span>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#4ade80", marginTop: 2 }}>
+                  {aiCatalog.commerce_policies.customer_confirmation_required ? "MANDATORY" : "OPTIONAL"}
+                </div>
+              </div>
+            </div>
+
+            {/* Optional Raw JSON view */}
+            {showRawCatalogJson && (
+              <div style={{ marginTop: 16 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8" }}>MACHINE-READABLE MANIFEST PAYLOAD:</span>
+                <pre style={{ margin: "6px 0 0", padding: 14, background: "#020617", borderRadius: 8, fontSize: 12, maxHeight: 260, overflowY: "auto", border: "1px solid #1e293b" }}>
+                  {JSON.stringify(aiCatalog, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Controlled AI Buyer Client Simulation Studio */}
+        <div style={{ ...styles.activityCard, marginTop: 20 }}>
+          <div style={styles.activityHeader}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h3 style={styles.cardTitle}>Autonomous AI Buyer Client Simulator</h3>
+                <span style={styles.liveBadge}>CONTROLLED AGENT</span>
+              </div>
+              <p style={styles.muted}>
+                Test an external autonomous AI buyer discovering products, assembling carts, and routing checkout through merchant policy gates.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ padding: 20 }}>
+            {/* Scenario Preset Chips */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                Select Golden Demonstration Scenario:
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {buyerScenarios.map((scen) => (
+                  <button
+                    key={scen.id}
+                    type="button"
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 8,
+                      border: buyerQuery === scen.query ? "2px solid #4f46e5" : "1px solid #d1d5db",
+                      background: buyerQuery === scen.query ? "#eef2ff" : "#fff",
+                      fontSize: 13,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onClick={() => {
+                      setBuyerQuery(scen.query);
+                      setBuyerBudget(scen.budget_limit);
+                      if (scen.product_id) setBuyerProductId(scen.product_id);
+                      executeBuyerProcure(scen);
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: "#1f2937" }}>{scen.title}</div>
+                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                      Budget: ₹{scen.budget_limit.toLocaleString("en-IN")} • {scen.expected_outcome}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Procurement Inputs */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 10, alignItems: "center" }}>
+              <input
+                type="text"
+                placeholder="Enter AI Buyer goal (e.g. 'Procure laptop for programming under ₹70,000 with mouse')..."
+                value={buyerQuery}
+                onChange={(e) => setBuyerQuery(e.target.value)}
+                style={{ ...styles.search, margin: 0 }}
+              />
+
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Budget:</span>
+                <input
+                  type="number"
+                  value={buyerBudget}
+                  onChange={(e) => setBuyerBudget(Number(e.target.value))}
+                  style={{
+                    padding: "12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 8,
+                    width: 110,
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+
+              <button
+                type="button"
+                disabled={buyerProcureLoading}
+                onClick={() => executeBuyerProcure()}
+                style={{
+                  ...styles.button,
+                  background: "#4338ca",
+                  color: "#fff",
+                  border: "none",
+                  padding: "0 22px",
+                  height: 44,
+                  marginTop: 0,
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span>🚀</span>
+                <span>{buyerProcureLoading ? "Autonomous Agent Running..." : "Execute AI Buyer"}</span>
+              </button>
+            </div>
+
+            {/* Procurement Execution Result Banner & Breakdown */}
+            {buyerProcureResult && (
+              <div
+                style={{
+                  marginTop: 20,
+                  borderRadius: 12,
+                  border: "1px solid",
+                  borderColor:
+                    buyerProcureResult.status === "SUCCESS"
+                      ? "#86efac"
+                      : buyerProcureResult.status === "NEEDS_APPROVAL"
+                      ? "#fde047"
+                      : "#fca5a5",
+                  background:
+                    buyerProcureResult.status === "SUCCESS"
+                      ? "#f0fdf4"
+                      : buyerProcureResult.status === "NEEDS_APPROVAL"
+                      ? "#fefce8"
+                      : "#fef2f2",
+                  padding: 18,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 22 }}>
+                      {buyerProcureResult.status === "SUCCESS" ? "✅" : buyerProcureResult.status === "NEEDS_APPROVAL" ? "⏳" : "🛑"}
+                    </span>
+                    <div>
+                      <strong
+                        style={{
+                          fontSize: 16,
+                          color:
+                            buyerProcureResult.status === "SUCCESS"
+                              ? "#15803d"
+                              : buyerProcureResult.status === "NEEDS_APPROVAL"
+                              ? "#854d0e"
+                              : "#b91c1c",
+                        }}
+                      >
+                        {buyerProcureResult.status === "SUCCESS"
+                          ? "Procurement Successfully Executed"
+                          : buyerProcureResult.status === "NEEDS_APPROVAL"
+                          ? "Procurement Paused: Needs Merchant Human Approval"
+                          : "Procurement Blocked: Policy Violation"}
+                      </strong>
+                      <p style={{ margin: "2px 0 0", fontSize: 13, color: "#374151" }}>
+                        {buyerProcureResult.message}
+                      </p>
+                    </div>
+                  </div>
+
+                  {buyerProcureResult.execution_id && (
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.button,
+                        background: "#fff",
+                        border: "1px solid #cbd5e1",
+                        fontSize: 12,
+                        marginTop: 0,
+                      }}
+                      onClick={() => viewTrace(buyerProcureResult.execution_id!)}
+                    >
+                      🔍 Inspect Trace #{buyerProcureResult.execution_id}
+                    </button>
+                  )}
+                </div>
+
+                {/* Procurement Summary Cards */}
+                <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+                  {buyerProcureResult.procurement_plan?.base_product && (
+                    <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                      <span style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>SELECTED PRODUCT</span>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>
+                        {buyerProcureResult.procurement_plan.base_product.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        Qty: {buyerProcureResult.procurement_plan.base_product.quantity} • ₹{buyerProcureResult.procurement_plan.base_product.total.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                  )}
+
+                  {buyerProcureResult.procurement_plan?.addon_product && (
+                    <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                      <span style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>COMPATIBLE ADD-ON</span>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>
+                        {buyerProcureResult.procurement_plan.addon_product.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        Qty: 1 • ₹{buyerProcureResult.procurement_plan.addon_product.total.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                    <span style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>TOTAL AMOUNT</span>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: "#0f172a" }}>
+                      ₹{buyerProcureResult.procurement_plan?.total_amount ? buyerProcureResult.procurement_plan.total_amount.toLocaleString("en-IN") : 0}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      Policy: {buyerProcureResult.policy_decision.decision}
+                    </div>
+                  </div>
+
+                  {buyerProcureResult.order?.razorpay_order_id && (
+                    <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                      <span style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>RAZORPAY ORDER ID</span>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: "#16a34a" }}>
+                        {buyerProcureResult.order.razorpay_order_id}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        Local Order #{buyerProcureResult.order.local_order_id}
+                      </div>
+                    </div>
+                  )}
+
+                  {buyerProcureResult.approval_id && (
+                    <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #fef08a" }}>
+                      <span style={{ fontSize: 11, color: "#854d0e", fontWeight: 700 }}>APPROVAL TICKET</span>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: "#a16207" }}>
+                        Ticket #{buyerProcureResult.approval_id} (PENDING)
+                      </div>
+                      <div style={{ fontSize: 12, color: "#854d0e" }}>
+                        Awaiting merchant authorization above
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
