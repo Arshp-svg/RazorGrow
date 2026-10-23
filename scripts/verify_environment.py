@@ -51,6 +51,7 @@ def check_dependencies() -> bool:
         ("sqlalchemy", "SQLAlchemy"),
         ("alembic", "Alembic"),
         ("pydantic", "Pydantic"),
+        ("email_validator", "email-validator"),
         ("jwt", "PyJWT"),
         ("argon2", "Argon2-cffi"),
         ("razorpay", "Razorpay SDK"),
