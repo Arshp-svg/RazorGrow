@@ -44,6 +44,31 @@ def get_db():
         db.close()
 
 
+from app.models.models import User, Merchant, MerchantMembership
+
+
+def _populate_user_response(db: Session, user: User) -> UserResponse:
+    membership = (
+        db.query(MerchantMembership)
+        .filter(MerchantMembership.user_id == user.id)
+        .first()
+    )
+    merchant_id = membership.merchant_id if membership else None
+    merchant_name = None
+    if merchant_id:
+        merchant = db.query(Merchant).filter(Merchant.id == merchant_id).first()
+        if merchant:
+            merchant_name = merchant.name
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        is_active=user.is_active,
+        merchant_id=merchant_id,
+        merchant_name=merchant_name,
+    )
+
+
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -58,6 +83,7 @@ def register(
             db,
             email=str(request.email),
             password=request.password,
+            shop_name=request.shop_name,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -65,11 +91,7 @@ def register(
             detail=str(exc),
         )
 
-    return UserResponse(
-        id=user.id,
-        email=user.email,
-        is_active=user.is_active,
-    )
+    return _populate_user_response(db, user)
     
 @router.post(
     "/login",
@@ -96,15 +118,11 @@ def login(
     refresh_token = create_refresh_token(db, user.id)
 
     return LoginResponse(
-    access_token=access_token,
-    refresh_token=refresh_token,
-    token_type="bearer",
-    user=UserResponse(
-        id=user.id,
-        email=user.email,
-        is_active=user.is_active,
-    ),
-)
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        user=_populate_user_response(db, user),
+    )
     
 @router.get(
     "/me",
@@ -112,12 +130,9 @@ def login(
 )
 def get_me(
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return UserResponse(
-        id=current_user.id,
-        email=current_user.email,
-        is_active=current_user.is_active,
-    )
+    return _populate_user_response(db, current_user)
     
 @router.post("/refresh")
 def refresh(request: RefreshRequest, db: Session = Depends(get_db)):

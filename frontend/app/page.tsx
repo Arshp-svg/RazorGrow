@@ -284,6 +284,22 @@ export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
+  // Self-serve Storefront & Merchant States
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [shopName, setShopName] = useState("");
+  const [currentMerchantId, setCurrentMerchantId] = useState<number>(1);
+  const [currentMerchantName, setCurrentMerchantName] = useState<string>("My Store");
+  const [copiedStoreLink, setCopiedStoreLink] = useState(false);
+
+  // Add Product Modal States
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductPrice, setNewProductPrice] = useState("");
+  const [newProductCategory, setNewProductCategory] = useState("laptop");
+  const [newProductTags, setNewProductTags] = useState("");
+  const [newProductInventory, setNewProductInventory] = useState("10");
+  const [addProductLoading, setAddProductLoading] = useState(false);
+
   /*
    * Restore authentication after a page refresh.
    *
@@ -411,19 +427,30 @@ export default function Home() {
 
         return response.json();
       }),
+
+      fetch(`${API}/auth/me`, {
+        headers: authHeaders,
+      }).then((r) => (r.ok ? r.json() : null)),
     ])
       .then(
         ([
           productData,
           dashboardData,
           approvalData,
+          meData,
         ]) => {
           setProducts(productData);
           setDashboard(dashboardData);
           setApprovals(approvalData);
+          if (meData?.merchant_id) {
+            setCurrentMerchantId(meData.merchant_id);
+          }
+          if (meData?.merchant_name) {
+            setCurrentMerchantName(meData.merchant_name);
+          }
           loadExecutions(token);
           loadCampaigns(token);
-          loadAICatalog();
+          loadAICatalog(meData?.merchant_id || 1);
           loadBuyerScenarios();
         },
       )
@@ -554,10 +581,11 @@ export default function Home() {
     }
   };
 
-  const loadAICatalog = async () => {
+  const loadAICatalog = async (merchantId?: number) => {
     setAiCatalogLoading(true);
+    const mId = merchantId ?? currentMerchantId ?? 1;
     try {
-      const response = await fetch(`${API}/ai/catalog?merchant_id=1`);
+      const response = await fetch(`${API}/ai/catalog?merchant_id=${mId}`);
       if (response.ok) {
         const data = await response.json();
         setAiCatalog(data);
@@ -681,6 +709,60 @@ export default function Home() {
     }
   };
 
+  const handleAddProduct = async () => {
+    if (!newProductName.trim() || !newProductPrice || !accessToken) return;
+    setAddProductLoading(true);
+    setError("");
+    try {
+      const payload = {
+        name: newProductName.trim(),
+        price: parseFloat(newProductPrice),
+        category: newProductCategory,
+        tags: newProductTags
+          ? newProductTags
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [],
+        use_cases: ["general"],
+        inventory: parseInt(newProductInventory, 10) || 5,
+      };
+
+      const res = await fetch(`${API}/products`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to add product (${res.status})`);
+      }
+
+      // Refresh products list
+      const prodRes = await fetch(`${API}/products`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (prodRes.ok) {
+        const pData = await prodRes.json();
+        setProducts(pData);
+      }
+      setShowAddProductModal(false);
+      setNewProductName("");
+      setNewProductPrice("");
+      setNewProductTags("");
+      loadAICatalog(currentMerchantId);
+    } catch (err: any) {
+      console.error("Add product error:", err);
+      setError(err.message || "Failed to add product");
+    } finally {
+      setAddProductLoading(false);
+    }
+  };
+
   const filteredProducts = products.filter(
     (product) => {
       const query = search.toLowerCase().trim();
@@ -719,12 +801,68 @@ export default function Home() {
           <div style={styles.brand}>RazorGrow</div>
 
           <p style={styles.subtitle}>
-            Sign in to access the merchant dashboard.
+            {authMode === "login"
+              ? "Sign in to access your merchant console."
+              : "Launch your autonomous AI merchant store."}
           </p>
+
+          {/* Mode Switcher Tabs */}
+          <div style={{ display: "flex", gap: "8px", margin: "18px 0 14px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("login");
+                setError("");
+              }}
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "8px",
+                border: authMode === "login" ? "1px solid #3395ff" : "1px solid #232a3a",
+                background: authMode === "login" ? "rgba(51, 149, 255, 0.15)" : "#12161f",
+                color: authMode === "login" ? "#3395ff" : "#8b94a8",
+                fontWeight: 600,
+                fontSize: "12px",
+                cursor: "pointer",
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("register");
+                setError("");
+              }}
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "8px",
+                border: authMode === "register" ? "1px solid #2fd180" : "1px solid #232a3a",
+                background: authMode === "register" ? "rgba(47, 209, 128, 0.15)" : "#12161f",
+                color: authMode === "register" ? "#2fd180" : "#8b94a8",
+                fontWeight: 600,
+                fontSize: "12px",
+                cursor: "pointer",
+              }}
+            >
+              Open New Shop
+            </button>
+          </div>
+
+          {authMode === "register" && (
+            <input
+              type="text"
+              placeholder="Store Name (e.g. Apex Gaming Hardware)"
+              value={shopName}
+              onChange={(event) => setShopName(event.target.value)}
+              style={styles.search}
+            />
+          )}
 
           <input
             type="email"
-            placeholder="Email"
+            placeholder="Merchant Email"
             value={email}
             onChange={(event) =>
               setEmail(event.target.value)
@@ -750,6 +888,25 @@ export default function Home() {
               setError("");
 
               try {
+                if (authMode === "register") {
+                  // Register merchant & auto-provision shop
+                  const regResp = await fetch(`${API}/auth/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      email,
+                      password,
+                      shop_name: shopName || "My Store",
+                    }),
+                  });
+
+                  if (!regResp.ok) {
+                    const errData = await regResp.json().catch(() => ({}));
+                    throw new Error(errData.detail || `Registration failed: ${regResp.status}`);
+                  }
+                }
+
+                // Log in
                 const response = await fetch(
                   `${API}/auth/login`,
                   {
@@ -792,36 +949,41 @@ export default function Home() {
                   );
                 }
 
-                /*
-                 * Store the token first.
-                 */
                 window.localStorage.setItem(
                   ACCESS_TOKEN_KEY,
                   token,
                 );
 
-                /*
-                 * Then update React state.
-                 * This causes the authenticated data
-                 * loading effect to run.
-                 */
+                if (data.user?.merchant_id) {
+                  setCurrentMerchantId(data.user.merchant_id);
+                }
+                if (data.user?.merchant_name) {
+                  setCurrentMerchantName(data.user.merchant_name);
+                }
+
                 setAccessToken(token);
                 setLoggedIn(true);
-              } catch (err) {
+              } catch (err: any) {
                 console.error(err);
-
-                setError(
-                  "Invalid email or password.",
-                );
+                setError(err.message || "Authentication failed. Check credentials.");
               } finally {
                 setLoginLoading(false);
               }
             }}
-            style={styles.button}
+            style={{
+              ...styles.button,
+              background: authMode === "register" ? "#2fd180" : "#3395ff",
+              color: "#05070c",
+              border: "none",
+              padding: "12px",
+              marginTop: "16px",
+            }}
           >
             {loginLoading
-              ? "Signing in..."
-              : "Sign in"}
+              ? "Processing..."
+              : authMode === "register"
+              ? "Create Store & Launch"
+              : "Sign in to Dashboard"}
           </button>
 
           {error && (
@@ -872,11 +1034,142 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={styles.status}>
-          <span style={styles.statusDot}></span>
-          System operational
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={styles.status}>
+            <span style={styles.statusDot}></span>
+            System operational
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+              setAccessToken(null);
+              setLoggedIn(false);
+            }}
+            style={{
+              padding: "4px 10px",
+              background: "#191f2c",
+              border: "1px solid #232a3a",
+              borderRadius: "6px",
+              color: "#8b94a8",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </header>
+
+      {/* Shareable Public Storefront Banner */}
+      <section
+        style={{
+          maxWidth: 1200,
+          margin: "0 auto 24px",
+          padding: "16px 20px",
+          borderRadius: "16px",
+          background: "linear-gradient(90deg, rgba(51, 149, 255, 0.12), rgba(47, 209, 128, 0.12))",
+          border: "1px solid rgba(51, 149, 255, 0.3)",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "16px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "28px" }}>🏪</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: "16px", color: "#e8ecf4", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>{currentMerchantName}</span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  padding: "2px 8px",
+                  borderRadius: "999px",
+                  background: "rgba(47, 209, 128, 0.2)",
+                  color: "#2fd180",
+                  border: "1px solid rgba(47, 209, 128, 0.4)",
+                  fontWeight: 600,
+                }}
+              >
+                Storefront Live
+              </span>
+            </div>
+            <div style={{ fontSize: "12px", color: "#8b94a8", marginTop: "2px" }}>
+              Customer Storefront URL:{" "}
+              <span style={{ fontFamily: "monospace", color: "#3395ff" }}>
+                http://localhost:3000/shop/{currentMerchantId}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              const url = `${window.location.origin}/shop/${currentMerchantId}`;
+              navigator.clipboard.writeText(url);
+              setCopiedStoreLink(true);
+              setTimeout(() => setCopiedStoreLink(false), 2500);
+            }}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "10px",
+              background: "#191f2c",
+              border: "1px solid #232a3a",
+              color: "#e8ecf4",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {copiedStoreLink ? "✓ Link Copied!" : "📋 Copy Store Link"}
+          </button>
+
+          <a
+            href={`/shop/${currentMerchantId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              padding: "8px 16px",
+              borderRadius: "10px",
+              background: "#3395ff",
+              color: "#05070c",
+              fontSize: "12px",
+              fontWeight: 700,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span>Visit Customer Store</span>
+            <span>↗</span>
+          </a>
+
+          <button
+            type="button"
+            onClick={() => setShowAddProductModal(true)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "10px",
+              background: "#2fd180",
+              color: "#05070c",
+              fontSize: "12px",
+              fontWeight: 700,
+              border: "none",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span>+ Add Product</span>
+          </button>
+        </div>
+      </section>
 
       {/* Dashboard */}
       <section style={styles.dashboard}>
@@ -2318,6 +2611,193 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      {/* Add Product Modal */}
+      {showAddProductModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "20px",
+          }}
+          onClick={() => setShowAddProductModal(false)}
+        >
+          <div
+            style={{
+              background: "#12161f",
+              border: "1px solid #232a3a",
+              borderRadius: "16px",
+              padding: "24px",
+              maxWidth: "480px",
+              width: "100%",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+              color: "#e8ecf4",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#e8ecf4" }}>
+                Add Product to Catalog
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddProductModal(false)}
+                style={{ background: "none", border: "none", color: "#8b94a8", fontSize: "18px", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#8b94a8" }}>
+              Items added here are immediately live on your public storefront and grounded in the AI Sales Agent's catalog.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: "#8b94a8", display: "block", marginBottom: "4px" }}>
+                  Product Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ergonomic Mechanical Keyboard"
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid #232a3a",
+                    background: "#0b0e14",
+                    color: "#e8ecf4",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#8b94a8", display: "block", marginBottom: "4px" }}>
+                    Price (₹ INR)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 4500"
+                    value={newProductPrice}
+                    onChange={(e) => setNewProductPrice(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #232a3a",
+                      background: "#0b0e14",
+                      color: "#e8ecf4",
+                      fontSize: "13px",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#8b94a8", display: "block", marginBottom: "4px" }}>
+                    Category
+                  </label>
+                  <select
+                    value={newProductCategory}
+                    onChange={(e) => setNewProductCategory(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #232a3a",
+                      background: "#0b0e14",
+                      color: "#e8ecf4",
+                      fontSize: "13px",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="laptop">Laptop</option>
+                    <option value="accessories">Accessories</option>
+                    <option value="smartphone">Smartphone</option>
+                    <option value="peripherals">Peripherals</option>
+                    <option value="hardware">Hardware</option>
+                    <option value="software">Software</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#8b94a8", display: "block", marginBottom: "4px" }}>
+                    Tags (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="gaming, wireless, rgb"
+                    value={newProductTags}
+                    onChange={(e) => setNewProductTags(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #232a3a",
+                      background: "#0b0e14",
+                      color: "#e8ecf4",
+                      fontSize: "13px",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "#8b94a8", display: "block", marginBottom: "4px" }}>
+                    Stock Units
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="10"
+                    value={newProductInventory}
+                    onChange={(e) => setNewProductInventory(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #232a3a",
+                      background: "#0b0e14",
+                      color: "#e8ecf4",
+                      fontSize: "13px",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={addProductLoading}
+                onClick={handleAddProduct}
+                style={{
+                  marginTop: "8px",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  background: "#2fd180",
+                  color: "#05070c",
+                  fontWeight: 700,
+                  fontSize: "14px",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {addProductLoading ? "Saving Product..." : "Save Product to Store"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

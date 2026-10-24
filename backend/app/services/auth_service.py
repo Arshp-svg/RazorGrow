@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 import jwt
 from app.config import settings
-from app.models.models import User
-from app.models.models import User, RefreshToken
+from app.models.models import User, RefreshToken, Merchant, MerchantMembership, Policy
 import hashlib
 import secrets
 
@@ -14,6 +13,7 @@ def register_user(
     db: Session,
     email: str,
     password: str,
+    shop_name: str | None = None,
 ) -> User:
     existing_user = (
         db.query(User)
@@ -31,6 +31,36 @@ def register_user(
     )
 
     db.add(user)
+    db.flush()
+
+    # Automatically provision a Merchant store for the registered user
+    default_name = shop_name.strip() if shop_name and shop_name.strip() else f"{email.split('@')[0].capitalize()}'s Shop"
+    merchant = Merchant(
+        name=default_name,
+        status="active",
+        settings="{}",
+    )
+    db.add(merchant)
+    db.flush()
+
+    membership = MerchantMembership(
+        merchant_id=merchant.id,
+        user_id=user.id,
+        role="OWNER",
+    )
+    db.add(membership)
+
+    # Automatically seed a baseline commerce policy
+    policy = Policy(
+        merchant_id=merchant.id,
+        max_order_amount=100000.0,
+        max_discount=10.0,
+        approval_threshold=90000.0,
+        confirmation_required=True,
+        version=1,
+    )
+    db.add(policy)
+
     db.commit()
     db.refresh(user)
 

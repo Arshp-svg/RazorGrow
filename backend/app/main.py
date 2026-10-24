@@ -20,6 +20,7 @@ from app.api.agent import router as agent_router
 import os
 from app.api.analytics import router as analytics_router
 from app.api.ai_catalog import router as ai_catalog_router
+from app.api.shop import router as shop_router
 from app.security.middleware import register_security_and_error_handlers
 
 app = FastAPI(title="RazorGrow API")
@@ -52,6 +53,7 @@ app.include_router(webhooks_router)
 app.include_router(agent_router)
 app.include_router(analytics_router)
 app.include_router(ai_catalog_router)
+app.include_router(shop_router)
 
 @app.get("/health")
 def health():
