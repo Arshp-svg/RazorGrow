@@ -61,7 +61,10 @@ export default function PublicStorefrontPage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [customerEmail, setCustomerEmail] = useState("customer@demo.com");
   const [customerName, setCustomerName] = useState("Alex Hunter");
+  const [customerPhone, setCustomerPhone] = useState("9876543210");
   const [checkingOut, setCheckingOut] = useState(false);
+  const [instantSimulating, setInstantSimulating] = useState(false);
+  const [copiedCard, setCopiedCard] = useState<string | null>(null);
   const [checkoutNotice, setCheckoutNotice] = useState<{
     type: "success" | "approval" | "error";
     message: string;
@@ -279,6 +282,7 @@ export default function PublicStorefrontPage() {
         prefill: {
           name: customerName,
           email: customerEmail,
+          contact: customerPhone || "9876543210",
         },
         theme: {
           color: "#3395ff",
@@ -300,6 +304,79 @@ export default function PublicStorefrontPage() {
       });
     } finally {
       setCheckingOut(false);
+    }
+  };
+
+  // 1-Click Instant Demo Payment (Server-side order + simulation)
+  const handleInstantDemoPay = async () => {
+    if (cart.length === 0) return;
+    setInstantSimulating(true);
+    setCheckoutNotice(null);
+
+    try {
+      const payload = {
+        items: cart.map((c) => ({
+          product_id: c.product.id,
+          quantity: c.quantity,
+        })),
+        customer_email: customerEmail,
+        customer_name: customerName,
+        confirmed: true,
+      };
+
+      const res = await fetch(`${API}/shop/${merchantId}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || "Checkout request rejected");
+      }
+
+      if (data.status === "NEEDS_APPROVAL") {
+        setCheckoutNotice({
+          type: "approval",
+          message: data.message || "Order held for merchant approval.",
+          orderId: data.order_id,
+        });
+        setCart([]);
+        return;
+      }
+
+      const simPaymentId = `pay_sim_${Math.random().toString(36).substring(2, 10)}`;
+      const verifyRes = await fetch(`${API}/shop/${merchantId}/verify-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: data.order_id,
+          razorpay_order_id: data.razorpay_order_id || `order_sim_${data.order_id}`,
+          razorpay_payment_id: simPaymentId,
+        }),
+      });
+
+      if (verifyRes.ok) {
+        setCheckoutNotice({
+          type: "success",
+          message: "Instant Demo Payment Successful! Order verified, inventory adjusted, and revenue logged.",
+          orderId: data.order_id,
+          paymentId: simPaymentId,
+        });
+        setCart([]);
+        loadStore();
+      } else {
+        const err = await verifyRes.json();
+        throw new Error(err.detail || "Payment verification failed on server.");
+      }
+    } catch (err: any) {
+      console.error("Instant demo pay error:", err);
+      setCheckoutNotice({
+        type: "error",
+        message: err.message || "Instant payment simulation failed",
+      });
+    } finally {
+      setInstantSimulating(false);
     }
   };
 
@@ -707,6 +784,7 @@ export default function PublicStorefrontPage() {
             {cart.length > 0 && (
               <div className="pt-4 border-t border-[#232a3a] space-y-4">
                 {/* Customer Prefill Info */}
+                {/* Customer Prefill Info */}
                 <div className="space-y-2">
                   <label className="text-[11px] font-mono text-[#8b94a8] uppercase">
                     Customer Details (Demo)
@@ -718,13 +796,67 @@ export default function PublicStorefrontPage() {
                     onChange={(e) => setCustomerName(e.target.value)}
                     className="w-full bg-[#0b0e14] border border-[#232a3a] rounded-lg px-3 py-1.5 text-xs text-[#e8ecf4] focus:outline-none focus:border-[#3395ff]"
                   />
-                  <input
-                    type="email"
-                    placeholder="Email Address"
-                    value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    className="w-full bg-[#0b0e14] border border-[#232a3a] rounded-lg px-3 py-1.5 text-xs text-[#e8ecf4] focus:outline-none focus:border-[#3395ff]"
-                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="email"
+                      placeholder="Email Address"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      className="w-full bg-[#0b0e14] border border-[#232a3a] rounded-lg px-3 py-1.5 text-xs text-[#e8ecf4] focus:outline-none focus:border-[#3395ff]"
+                    />
+                    <input
+                      type="tel"
+                      placeholder="Mobile (+91...)"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      className="w-full bg-[#0b0e14] border border-[#232a3a] rounded-lg px-3 py-1.5 text-xs text-[#e8ecf4] focus:outline-none focus:border-[#3395ff]"
+                    />
+                  </div>
+                </div>
+
+                {/* Test Payment Tips & Cheat Sheet */}
+                <div className="p-3 bg-[#0b0e14] border border-[#3395ff]/30 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-[#3395ff] font-semibold text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <span>🧪</span> Razorpay Test Credentials (India)
+                    </span>
+                  </div>
+
+                  <div className="text-[11px] text-[#8b94a8] leading-tight space-y-1.5">
+                    <div className="p-1.5 bg-[#191f2c] rounded border border-[#232a3a]">
+                      <span className="text-[#2fd180] font-bold">✓ Easiest Method:</span> In the Razorpay modal, select <strong>Netbanking</strong> → Pick any bank (HDFC/ICICI) → Click the green <strong>"Success"</strong> button (no OTP, no card needed!).
+                    </div>
+                    <div className="text-[10px] text-[#8b94a8]">
+                      <span className="text-[#ffb020]">⚠️ Note on Cards:</span> Razorpay blocks <code className="text-[#ff5c5c]">4111 1111 1111 1111</code> because it is an international card. Use Indian test cards instead:
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText("5123450000000008");
+                          setCopiedCard("mc");
+                          setTimeout(() => setCopiedCard(null), 2000);
+                        }}
+                        className="px-2 py-1 bg-[#12161f] hover:bg-[#191f2c] border border-[#232a3a] rounded text-[10px] text-[#e8ecf4] cursor-pointer flex items-center gap-1"
+                      >
+                        <span>💳</span> Mastercard: <code>5123 4500 0000 0008</code> {copiedCard === "mc" ? "✓" : "📋"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText("5085050000000001");
+                          setCopiedCard("rupay");
+                          setTimeout(() => setCopiedCard(null), 2000);
+                        }}
+                        className="px-2 py-1 bg-[#12161f] hover:bg-[#191f2c] border border-[#232a3a] rounded text-[10px] text-[#e8ecf4] cursor-pointer flex items-center gap-1"
+                      >
+                        <span>💳</span> RuPay: <code>5085 0500 0000 0001</code> {copiedCard === "rupay" ? "✓" : "📋"}
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-[#8b94a8]">
+                      Any future expiry (e.g. <code>12/28</code>), CVV <code>123</code>, OTP <code>123456</code>.
+                    </div>
+                  </div>
                 </div>
 
                 {/* Subtotal */}
@@ -742,14 +874,34 @@ export default function PublicStorefrontPage() {
                   </div>
                 )}
 
-                {/* Checkout Trigger */}
-                <button
-                  onClick={handleCheckout}
-                  disabled={checkingOut}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#3395ff] to-[#2fd180] text-black font-bold text-sm hover:opacity-95 transition-all shadow-lg shadow-[#3395ff]/20 cursor-pointer disabled:opacity-50"
-                >
-                  {checkingOut ? "Preparing Razorpay Order..." : `Pay ${money(cartSubtotal)} (Test Mode)`}
-                </button>
+                {/* Checkout Trigger Buttons */}
+                <div className="space-y-2">
+                  {/* 1-Click Instant Demo Checkout */}
+                  <button
+                    onClick={handleInstantDemoPay}
+                    disabled={instantSimulating || checkingOut}
+                    className="w-full py-2.5 rounded-xl bg-[#2fd180] text-black font-bold text-xs hover:bg-[#2fd180]/90 transition-all shadow-md shadow-[#2fd180]/15 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <span>⚡</span>
+                    <span>
+                      {instantSimulating
+                        ? "Simulating Instant Success..."
+                        : `1-Click Instant Demo Pay (${money(cartSubtotal)})`}
+                    </span>
+                  </button>
+
+                  {/* Standard Razorpay Modal Trigger */}
+                  <button
+                    onClick={handleCheckout}
+                    disabled={checkingOut || instantSimulating}
+                    className="w-full py-2.5 rounded-xl bg-[#191f2c] hover:bg-[#232a3a] border border-[#3395ff]/40 text-[#3395ff] font-semibold text-xs transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <span>💳</span>
+                    <span>
+                      {checkingOut ? "Opening Razorpay..." : "Pay with Razorpay Modal"}
+                    </span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
