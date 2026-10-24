@@ -17,34 +17,34 @@ def get_dashboard_metrics(
     successful_payments = sum(
         1
         for order in orders
-        if order.status == "paid"
+        if (order.status or "").lower() == "paid"
     )
 
     failed_payments = sum(
         1
         for order in orders
-        if order.status == "failed"
+        if (order.status or "").lower() == "failed"
     )
     created_orders = sum(
     1
     for order in orders
-    if order.status == "created"
+    if (order.status or "").lower() == "created"
 )
 
     revenue = sum(
         order.amount
         for order in orders
-        if order.status == "paid"
+        if (order.status or "").lower() == "paid"
     )
 
     recovered_payments = sum(
         1
         for order in orders
-        if order.status == "paid"
+        if (order.status or "").lower() == "paid"
         and any(
             audit.entity_id == str(order.id)
             and audit.action == "payment_status_updated"
-            and audit.external_result == "failed"
+            and (audit.external_result or "").lower() == "failed"
             for audit in (
                 db.query(AuditLog)
                 .filter(AuditLog.merchant_id == merchant_id)
@@ -56,7 +56,7 @@ def get_dashboard_metrics(
     recovered_revenue = sum(
     order.amount
     for order in orders
-    if order.status == "paid"
+    if (order.status or "").lower() == "paid"
     and any(
         audit.entity_id == str(order.id)
         and audit.action == "payment_status_updated"

@@ -285,6 +285,7 @@ export default function Home() {
   const [authChecked, setAuthChecked] = useState(false);
 
   // Self-serve Storefront & Merchant States
+  const [activeTab, setActiveTab] = useState<"overview" | "products" | "approvals" | "traces" | "campaigns" | "ai_buyer">("overview");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [shopName, setShopName] = useState("");
   const [currentMerchantId, setCurrentMerchantId] = useState<number>(1);
@@ -784,6 +785,8 @@ export default function Home() {
     },
   );
 
+  const pendingApprovalsCount = approvals.filter((a) => a.status === "PENDING").length;
+
   /*
    * Prevent hydration mismatch.
    */
@@ -1171,7 +1174,86 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Dashboard */}
+      {/* Navigation Tabs Bar */}
+      <nav
+        style={{
+          maxWidth: 1200,
+          margin: "0 auto 24px",
+          display: "flex",
+          gap: "8px",
+          overflowX: "auto",
+          paddingBottom: "8px",
+          borderBottom: "1px solid #232a3a",
+        }}
+      >
+        {[
+          { id: "overview", label: "Overview & Revenue", icon: "📊" },
+          { id: "products", label: "Catalog & Products", icon: "📦", count: products.length },
+          { id: "approvals", label: "Pending Approvals", icon: "⚖️", badge: pendingApprovalsCount },
+          { id: "traces", label: "Agent Observability", icon: "🤖" },
+          { id: "campaigns", label: "Growth Campaigns", icon: "📈" },
+          { id: "ai_buyer", label: "AI Buyer (A2A)", icon: "🌐" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "10px 18px",
+                borderRadius: "10px",
+                background: isActive ? "#191f2c" : "transparent",
+                border: "1px solid",
+                borderColor: isActive ? "#3395ff" : "#232a3a",
+                color: isActive ? "#3395ff" : "#8b94a8",
+                fontWeight: isActive ? 700 : 500,
+                fontSize: "13px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+              {typeof tab.count === "number" && (
+                <span
+                  style={{
+                    padding: "2px 7px",
+                    borderRadius: "999px",
+                    background: isActive ? "rgba(51, 149, 255, 0.2)" : "#232a3a",
+                    color: isActive ? "#3395ff" : "#8b94a8",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {tab.count}
+                </span>
+              )}
+              {tab.badge && tab.badge > 0 ? (
+                <span
+                  style={{
+                    padding: "2px 7px",
+                    borderRadius: "999px",
+                    background: "#ffb020",
+                    color: "#05070c",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                  }}
+                >
+                  {tab.badge}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Tab 1: Dashboard Overview */}
+      {activeTab === "overview" && (
       <section style={styles.dashboard}>
         <div style={styles.sectionHeader}>
           <div>
@@ -1184,6 +1266,32 @@ export default function Home() {
               and agent activity
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (accessToken) {
+                setDashboardLoading(true);
+                fetch(`${API}/analytics/overview?limit=10`, {
+                  headers: { Authorization: `Bearer ${accessToken}` },
+                })
+                  .then((r) => r.ok && r.json())
+                  .then((d) => d && setDashboard(d))
+                  .finally(() => setDashboardLoading(false));
+              }
+            }}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "8px",
+              background: "#191f2c",
+              border: "1px solid #232a3a",
+              color: "#e8ecf4",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            🔄 Refresh Metrics
+          </button>
         </div>
 
         {dashboardLoading ? (
@@ -1347,8 +1455,10 @@ export default function Home() {
           </>
         ) : null}
       </section>
+      )}
 
-      {/* Autonomous Revenue Intelligence & Campaign Studio (Day 11) */}
+      {/* Tab 2: Autonomous Revenue Intelligence & Campaign Studio (Day 11) */}
+      {activeTab === "campaigns" && (
       <section style={styles.catalog}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
@@ -1611,8 +1721,10 @@ export default function Home() {
           )}
         </div>
       </section>
+      )}
 
-      {/* Approval Center */}
+      {/* Tab 3: Approval Center */}
+      {activeTab === "approvals" && (
       <section style={styles.catalog}>
         <div>
           <h2 style={styles.title}>
@@ -1801,8 +1913,10 @@ export default function Home() {
           </div>
         )}
       </section>
+      )}
 
-      {/* Agent Observability & Trace Reconstructor */}
+      {/* Tab 4: Agent Observability & Trace Reconstructor */}
+      {activeTab === "traces" && (
       <section style={styles.catalog}>
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2152,8 +2266,10 @@ export default function Home() {
           )}
         </div>
       </section>
+      )}
 
-      {/* AI-Readable Catalog & Autonomous AI Buyer Simulator (Day 12) */}
+      {/* Tab 5: AI-Readable Catalog & Autonomous AI Buyer Simulator (Day 12) */}
+      {activeTab === "ai_buyer" && (
       <section style={styles.catalog}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
@@ -2492,8 +2608,10 @@ export default function Home() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* Product Catalog */}
+      {/* Tab 6: Product Catalog */}
+      {activeTab === "products" && (
       <section style={styles.catalog}>
         <div>
           <h2 style={styles.title}>
@@ -2611,6 +2729,7 @@ export default function Home() {
           ))}
         </div>
       </section>
+      )}
 
       {/* Add Product Modal */}
       {showAddProductModal && (

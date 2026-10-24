@@ -24,11 +24,11 @@ def get_revenue_metrics(db: Session, merchant_id: int) -> dict:
     )
     total_orders = len(orders)
 
-    successful_payments = sum(1 for o in orders if o.status == "paid")
-    failed_payments = sum(1 for o in orders if o.status == "failed")
-    created_orders = sum(1 for o in orders if o.status == "created")
+    successful_payments = sum(1 for o in orders if (o.status or "").lower() == "paid")
+    failed_payments = sum(1 for o in orders if (o.status or "").lower() == "failed")
+    created_orders = sum(1 for o in orders if (o.status or "").lower() == "created")
 
-    total_revenue = sum(o.amount for o in orders if o.status == "paid")
+    total_revenue = sum(o.amount for o in orders if (o.status or "").lower() == "paid")
 
     # Audit logs for failure recovery & policy checks
     audit_logs = (
@@ -41,19 +41,19 @@ def get_revenue_metrics(db: Session, merchant_id: int) -> dict:
         audit.entity_id
         for audit in audit_logs
         if audit.action == "payment_status_updated"
-        and audit.external_result == "failed"
+        and (audit.external_result or "").lower() == "failed"
         and audit.entity_id
     }
 
     recovered_orders = [
         o for o in orders
-        if o.status == "paid" and str(o.id) in failed_order_ids
+        if (o.status or "").lower() == "paid" and str(o.id) in failed_order_ids
     ]
     recovered_payments = len(recovered_orders)
     recovered_revenue = sum(o.amount for o in recovered_orders)
 
     # Calculate Upsell and AI-influenced revenue
-    paid_orders = [o for o in orders if o.status == "paid"]
+    paid_orders = [o for o in orders if (o.status or "").lower() == "paid"]
     upsell_revenue = 0.0
     ai_influenced_revenue = 0.0
 

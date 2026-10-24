@@ -336,7 +336,7 @@ def shop_checkout(merchant_id: int, request: ShopCheckoutRequest, db: Session = 
         cart_id=cart.id,
         idempotency_key=idempotency_key,
         amount=subtotal,
-        status="CREATED",
+        status="created",
         razorpay_order_id=razorpay_order.get("id"),
     )
     db.add(order)
@@ -375,8 +375,8 @@ def shop_verify_payment(merchant_id: int, request: ShopPaymentVerifyRequest, db:
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Transition order state machine to PAID
-    order.status = "PAID"
+    # Transition order state machine to paid
+    order.status = "paid"
 
     # Decrement inventory for purchased products
     cart_items = db.query(CartItem).filter(CartItem.cart_id == order.cart_id).all()
@@ -397,7 +397,7 @@ def shop_verify_payment(merchant_id: int, request: ShopPaymentVerifyRequest, db:
     )
 
     return {
-        "status": "PAID",
+        "status": "paid",
         "order_id": order.id,
         "amount": order.amount,
         "razorpay_payment_id": request.razorpay_payment_id,

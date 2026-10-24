@@ -101,7 +101,7 @@ def test_merchant_self_serve_registration_and_shop_flow():
     )
     assert verify_resp.status_code == 200
     verify_data = verify_resp.json()
-    assert verify_data["status"] == "PAID"
+    assert verify_data["status"] == "paid"
 
     # Verify inventory was decremented in DB from 5 to 4
     db = SessionLocal()
@@ -109,7 +109,7 @@ def test_merchant_self_serve_registration_and_shop_flow():
         updated_prod = db.query(Product).filter(Product.id == product_id).first()
         assert updated_prod.inventory == 4
         updated_order = db.query(Order).filter(Order.id == order_id).first()
-        assert updated_order.status == "PAID"
+        assert updated_order.status == "paid"
     finally:
         db.close()
 
