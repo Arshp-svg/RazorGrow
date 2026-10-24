@@ -44,6 +44,15 @@ function money(amount: number) {
   return `₹${amount.toLocaleString("en-IN")}`;
 }
 
+function formatRazorpayPhone(phone: string): string {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return "+919876543210";
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
+  if (digits.length > 10) return `+${digits}`;
+  return `+91${digits.padEnd(10, "0")}`;
+}
+
 export default function PublicStorefrontPage() {
   const params = useParams();
   const merchantId = params?.merchantId ? String(params.merchantId) : "1";
@@ -61,7 +70,7 @@ export default function PublicStorefrontPage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [customerEmail, setCustomerEmail] = useState("customer@demo.com");
   const [customerName, setCustomerName] = useState("Alex Hunter");
-  const [customerPhone, setCustomerPhone] = useState("9876543210");
+  const [customerPhone, setCustomerPhone] = useState("+919876543210");
   const [checkingOut, setCheckingOut] = useState(false);
   const [instantSimulating, setInstantSimulating] = useState(false);
   const [copiedCard, setCopiedCard] = useState<string | null>(null);
@@ -280,9 +289,13 @@ export default function PublicStorefrontPage() {
           }
         },
         prefill: {
-          name: customerName,
-          email: customerEmail,
-          contact: customerPhone || "9876543210",
+          name: customerName?.trim() || "Alex Hunter",
+          email: customerEmail?.trim() || "customer@demo.com",
+          contact: formatRazorpayPhone(customerPhone),
+        },
+        notes: {
+          order_id: String(orderDbId),
+          store_name: storeInfo?.store_name || "RazorGrow Store",
         },
         theme: {
           color: "#3395ff",
@@ -784,11 +797,16 @@ export default function PublicStorefrontPage() {
             {cart.length > 0 && (
               <div className="pt-4 border-t border-[#232a3a] space-y-4">
                 {/* Customer Prefill Info */}
-                {/* Customer Prefill Info */}
                 <div className="space-y-2">
-                  <label className="text-[11px] font-mono text-[#8b94a8] uppercase">
-                    Customer Details (Demo)
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-mono text-[#8b94a8] uppercase">
+                      Customer Details (Auto-Prefilled)
+                    </label>
+                    <span className="text-[10px] text-[#2fd180] font-mono flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#2fd180]" />
+                      Prefilled for Test
+                    </span>
+                  </div>
                   <input
                     type="text"
                     placeholder="Full Name"
@@ -806,12 +824,15 @@ export default function PublicStorefrontPage() {
                     />
                     <input
                       type="tel"
-                      placeholder="Mobile (+91...)"
+                      placeholder="Mobile (+919876543210)"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       className="w-full bg-[#0b0e14] border border-[#232a3a] rounded-lg px-3 py-1.5 text-xs text-[#e8ecf4] focus:outline-none focus:border-[#3395ff]"
                     />
                   </div>
+                  <p className="text-[10px] text-[#8b94a8]">
+                    Phone number includes <code className="text-[#3395ff]">+91</code> country code so Razorpay auto-fills the contact screen.
+                  </p>
                 </div>
 
                 {/* Test Payment Tips & Cheat Sheet */}
@@ -824,10 +845,13 @@ export default function PublicStorefrontPage() {
 
                   <div className="text-[11px] text-[#8b94a8] leading-tight space-y-1.5">
                     <div className="p-1.5 bg-[#191f2c] rounded border border-[#232a3a]">
+                      <span className="text-[#3395ff] font-bold">ℹ️ Contact Screen:</span> Razorpay asks for mobile & email for compliance/receipts. Both are prefilled (+919876543210) — simply click <strong>"Continue"</strong> to proceed.
+                    </div>
+                    <div className="p-1.5 bg-[#191f2c] rounded border border-[#232a3a]">
                       <span className="text-[#2fd180] font-bold">✓ Easiest Method:</span> In the Razorpay modal, select <strong>Netbanking</strong> → Pick any bank (HDFC/ICICI) → Click the green <strong>"Success"</strong> button (no OTP, no card needed!).
                     </div>
                     <div className="text-[10px] text-[#8b94a8]">
-                      <span className="text-[#ffb020]">⚠️ Note on Cards:</span> Razorpay blocks <code className="text-[#ff5c5c]">4111 1111 1111 1111</code> because it is an international card. Use Indian test cards instead:
+                      <span className="text-[#ffb020]">⚠️ Note on Cards:</span> Razorpay blocks international card <code className="text-[#ff5c5c]">4111 1111 1111 1111</code>. Use Indian test cards instead:
                     </div>
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       <button
