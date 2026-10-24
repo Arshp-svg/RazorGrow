@@ -293,6 +293,11 @@ export default function PublicStorefrontPage() {
           email: customerEmail?.trim() || "customer@demo.com",
           contact: formatRazorpayPhone(customerPhone),
         },
+        readonly: {
+          contact: true,
+          email: true,
+          name: true,
+        },
         notes: {
           order_id: String(orderDbId),
           store_name: storeInfo?.store_name || "RazorGrow Store",
@@ -844,14 +849,22 @@ export default function PublicStorefrontPage() {
                   </div>
 
                   <div className="text-[11px] text-[#8b94a8] leading-tight space-y-1.5">
-                    <div className="p-1.5 bg-[#191f2c] rounded border border-[#232a3a]">
-                      <span className="text-[#3395ff] font-bold">ℹ️ Contact Screen:</span> Razorpay asks for mobile & email for compliance/receipts. Both are prefilled (+919876543210) — simply click <strong>"Continue"</strong> to proceed.
+                    <div className="p-2 bg-[#191f2c] rounded-lg border border-[#232a3a] space-y-1">
+                      <div className="text-[#3395ff] font-bold flex items-center gap-1">
+                        <span>ℹ️</span> Why does Razorpay ask for Mobile Number?
+                      </div>
+                      <p className="text-[10px] text-[#8b94a8] leading-relaxed">
+                        Razorpay's official checkout modal strictly requires mobile number & email by Indian RBI compliance. In Test Mode:
+                      </p>
+                      <ul className="text-[10px] text-[#e8ecf4] list-disc list-inside space-y-0.5">
+                        <li>You can click <strong>"Continue"</strong> on the prefilled number.</li>
+                        <li>If Razorpay asks for OTP, enter test OTP: <strong className="text-[#2fd180] font-mono">123456</strong> (no real SMS needed).</li>
+                        <li>Select <strong>Netbanking</strong> → Bank → Green <strong>"Success"</strong> button for 1-click test bank approval.</li>
+                      </ul>
                     </div>
-                    <div className="p-1.5 bg-[#191f2c] rounded border border-[#232a3a]">
-                      <span className="text-[#2fd180] font-bold">✓ Easiest Method:</span> In the Razorpay modal, select <strong>Netbanking</strong> → Pick any bank (HDFC/ICICI) → Click the green <strong>"Success"</strong> button (no OTP, no card needed!).
-                    </div>
+
                     <div className="text-[10px] text-[#8b94a8]">
-                      <span className="text-[#ffb020]">⚠️ Note on Cards:</span> Razorpay blocks international card <code className="text-[#ff5c5c]">4111 1111 1111 1111</code>. Use Indian test cards instead:
+                      <span className="text-[#ffb020]">💳 Test Cards:</span> International cards like <code className="text-[#ff5c5c]">4111...</code> are blocked. Use Indian test cards:
                     </div>
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       <button
@@ -899,20 +912,31 @@ export default function PublicStorefrontPage() {
                 )}
 
                 {/* Checkout Trigger Buttons */}
-                <div className="space-y-2">
-                  {/* 1-Click Instant Demo Checkout */}
-                  <button
-                    onClick={handleInstantDemoPay}
-                    disabled={instantSimulating || checkingOut}
-                    className="w-full py-2.5 rounded-xl bg-[#2fd180] text-black font-bold text-xs hover:bg-[#2fd180]/90 transition-all shadow-md shadow-[#2fd180]/15 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
-                  >
-                    <span>⚡</span>
-                    <span>
-                      {instantSimulating
-                        ? "Simulating Instant Success..."
-                        : `1-Click Instant Demo Pay (${money(cartSubtotal)})`}
-                    </span>
-                  </button>
+                <div className="space-y-2.5">
+                  {/* 1-Click Instant Demo Checkout (No phone, no OTP) */}
+                  <div className="space-y-1">
+                    <button
+                      onClick={handleInstantDemoPay}
+                      disabled={instantSimulating || checkingOut}
+                      className="w-full py-3 rounded-xl bg-[#2fd180] text-black font-extrabold text-xs hover:bg-[#2fd180]/90 transition-all shadow-lg shadow-[#2fd180]/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <span className="text-sm">⚡</span>
+                      <span>
+                        {instantSimulating
+                          ? "Simulating Instant Success..."
+                          : `1-Click Instant Demo Pay (${money(cartSubtotal)})`}
+                      </span>
+                    </button>
+                    <p className="text-[10px] text-center text-[#2fd180]">
+                      ✓ Recommended for testing: Skips mobile number & OTP entirely, logs revenue instantly.
+                    </p>
+                  </div>
+
+                  <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-[#232a3a]"></div>
+                    <span className="flex-shrink mx-2 text-[10px] text-[#8b94a8] uppercase font-mono">or test gateway</span>
+                    <div className="flex-grow border-t border-[#232a3a]"></div>
+                  </div>
 
                   {/* Standard Razorpay Modal Trigger */}
                   <button
